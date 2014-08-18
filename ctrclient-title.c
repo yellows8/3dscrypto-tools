@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 
 #include "ctrclient.h"
 #include "types.h"
@@ -114,7 +115,7 @@ ctr_tmd_body *tmd_get_body(unsigned char *tmdbuf)
 	return body;
 }
 
-int cdn_download(u64 titleid, char *titledir, char *name, char *path)
+int cdn_download(uint64_t titleid, char *titledir, char *name, char *path)
 {
 	int ret;
 	FILE *f;
@@ -123,7 +124,7 @@ int cdn_download(u64 titleid, char *titledir, char *name, char *path)
 	memset(url, 0, 256);
 
 	if(path[0]==0)snprintf(path, 255, "%s/%s", titledir, name);
-	snprintf(url, 255, "http://nus.cdn.c.shop.nintendowifi.net/ccs/download/%016llx/%s", titleid, name);
+	snprintf(url, 255, "http://nus.cdn.c.shop.nintendowifi.net/ccs/download/%016"PRIx64"/%s", titleid, name);
 
 	f = fopen(path, "wb");
 	if(f==NULL)
@@ -140,7 +141,7 @@ int cdn_download(u64 titleid, char *titledir, char *name, char *path)
 	return ret;
 }
 
-int download_contents(u64 titleid, char *titlepath, ctr_tmd_contentchunk *chunks, u16 total_contents)
+int download_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *chunks, u16 total_contents)
 {
 	int ret;
 	char path[256];
@@ -194,7 +195,7 @@ int decrypt_ncch(u32 contentid, char *titlepath)
 	return ret;
 }
 
-int decrypt_contents(u64 titleid, char *titlepath, ctr_tmd_contentchunk *chunks, u16 total_contents)
+int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *chunks, u16 total_contents)
 {
 	int ret;
 	FILE *f;
@@ -209,7 +210,7 @@ int decrypt_contents(u64 titleid, char *titlepath, ctr_tmd_contentchunk *chunks,
 
 	u16 index;
 	u32 contentid;
-	u64 contentsize;
+	uint64_t contentsize;
 	u32 contentsz_aligned;
 
 	memset(titlekey, 0, 16);
@@ -247,7 +248,7 @@ int decrypt_contents(u64 titleid, char *titlepath, ctr_tmd_contentchunk *chunks,
 
 		printf("Index %d:\n", index);
 		printf("ContentID: %08x\n", contentid);
-		printf("Content Size: %016llx\n", contentsize);
+		printf("Content Size: %016"PRIx64"\n", contentsize);
 
 		memset(iv, 0, 16);
 		memcpy(iv, chunks[index].index, 2);
@@ -338,7 +339,7 @@ int decrypt_contents(u64 titleid, char *titlepath, ctr_tmd_contentchunk *chunks,
 	return 0;
 }
 
-int parse_tmd(u64 titleid, char *titlepath)
+int parse_tmd(uint64_t titleid, char *titlepath)
 {
 	int ret = 0;
 	unsigned char *tmdbuf;
@@ -421,7 +422,7 @@ int parse_tmd(u64 titleid, char *titlepath)
 	return ret;
 }
 
-int download_title(u64 titleid, char *titlepath)
+int download_title(uint64_t titleid, char *titlepath)
 {
 	int ret;
 	char path[256];
@@ -600,7 +601,7 @@ int main(int argc, char *argv[])
 	int pos;
 	unsigned int tmp=0;
 	int use_csv = 0;
-	u64 titleid = 0;
+	uint64_t titleid = 0;
 	FILE *f;
 	char *strptr;
 	unsigned char titlekey[16];
@@ -664,7 +665,7 @@ int main(int argc, char *argv[])
 			else
 			{
 				titleid_set = 1;
-				sscanf(&argv[argi][10], "%016llx", &titleid);
+				sscanf(&argv[argi][10], "%016"PRIx64, &titleid);
 			}
 		}
 
@@ -708,11 +709,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		#ifndef WIN32
-		mkdir(titlepath, 0777);
-		#else
-		mkdir(titlepath);
-		#endif
+		makedir(titlepath);
 	}
 
 	if(!use_csv)
@@ -757,7 +754,7 @@ int main(int argc, char *argv[])
 			//printf("Line: %s\n", linebuf);
 
 			strptr = strtok(linebuf, ",");//TID
-			sscanf(strptr, "%016llx", &titleid);
+			sscanf(strptr, "%016"PRIx64, &titleid);
 
 			strptr = strtok(NULL, ",");//region
 			memset(region, 0, 8);
@@ -768,33 +765,18 @@ int main(int argc, char *argv[])
 			sscanf(strptr, "%u", &titleversion);
 
 			memset(titlepathtmp, 0, 256);
-			snprintf(titlepathtmp, 255, "%s/%016llx", titlepath, titleid);
-
-			#ifndef WIN32
-			mkdir(titlepathtmp, 0777);
-			#else
-			mkdir(titlepathtmp);
-			#endif
+			snprintf(titlepathtmp, 255, "%s/%016"PRIx64, titlepath, titleid);
+			makedir(titlepathtmp);
 
 			pos = strlen(titlepathtmp);
 			snprintf(&titlepathtmp[pos], 255 - pos, "/%s", region);
-
-			#ifndef WIN32
-			mkdir(titlepathtmp, 0777);
-			#else
-			mkdir(titlepathtmp);
-			#endif
+			makedir(titlepathtmp);
 
 			pos = strlen(titlepathtmp);
 			snprintf(&titlepathtmp[pos], 255 - pos, "/v%u", titleversion);
+			makedir(titlepathtmp);
 
-			#ifndef WIN32
-			mkdir(titlepathtmp, 0777);
-			#else
-			mkdir(titlepathtmp);
-			#endif
-
-			printf("titleID: %016llx region: %s titlever: %u. path: %s\n", titleid, region, titleversion, titlepathtmp);
+			printf("titleID: %016"PRIx64" region: %s titlever: %u. path: %s\n", titleid, region, titleversion, titlepathtmp);
 
 			if(dltitle)
 			{
