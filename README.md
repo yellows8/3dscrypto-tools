@@ -2,4 +2,5 @@
 * ctrclient-ncch: Decrypt NCCH.
 
 Credits:
-* utils.c/utils.h and types.h are from ctrtool. tmd.h is based on the header from ctrtool.
+* utils.c/utils.h and types.h are from ctrtool. tmd.h and ncch.h are based on the headers from ctrtool.
+
