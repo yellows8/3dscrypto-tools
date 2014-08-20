@@ -56,10 +56,8 @@ int http_request(char *url, FILE *outfile)
   curl_easy_setopt(hnd, CURLOPT_UNRESTRICTED_AUTH, 0);
   curl_easy_setopt(hnd, CURLOPT_TRANSFERTEXT, 0);
   curl_easy_setopt(hnd, CURLOPT_USERPWD, NULL);
-  curl_easy_setopt(hnd, CURLOPT_NOPROXY, NULL);
   curl_easy_setopt(hnd, CURLOPT_RANGE, NULL);
   curl_easy_setopt(hnd, CURLOPT_TIMEOUT, 0);
-  curl_easy_setopt(hnd, CURLOPT_USERAGENT, "curl/7.19.7 (i486-pc-linux-gnu) libcurl/7.19.7 OpenSSL/0.9.8k zlib/1.2.3.3 libidn/1.15");
   curl_easy_setopt(hnd, CURLOPT_LOW_SPEED_LIMIT, 0);
   curl_easy_setopt(hnd, CURLOPT_LOW_SPEED_TIME, 0);
   curl_easy_setopt(hnd, CURLOPT_MAX_SEND_SPEED_LARGE, (curl_off_t)0);
@@ -81,8 +79,6 @@ int http_request(char *url, FILE *outfile)
   curl_easy_setopt(hnd, CURLOPT_POSTQUOTE, NULL);
   curl_easy_setopt(hnd, CURLOPT_PREQUOTE, NULL);
   curl_easy_setopt(hnd, CURLOPT_WRITEHEADER, NULL);
-  curl_easy_setopt(hnd, CURLOPT_COOKIEFILE, NULL);
-  curl_easy_setopt(hnd, CURLOPT_COOKIESESSION, 0);
   curl_easy_setopt(hnd, CURLOPT_SSLVERSION, 3);
   curl_easy_setopt(hnd, CURLOPT_TIMECONDITION, 0);
   curl_easy_setopt(hnd, CURLOPT_TIMEVALUE, 0);
