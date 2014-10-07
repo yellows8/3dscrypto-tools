@@ -593,11 +593,12 @@ int main(int argc, char *argv[])
 {
 	int ret;
 	int argi, i, linei;
-	int titleid_set = 0;
+	int titleid_set = 0, found_start = 0;
 	int pos;
 	unsigned int tmp=0;
 	int use_csv = 0;
 	uint64_t titleid = 0;
+	uint64_t begintitleid = 0;
 	FILE *f;
 	char *strptr;
 	unsigned char titlekey[16];
@@ -620,6 +621,7 @@ int main(int argc, char *argv[])
 		printf("--titlever=<decimalver> Download the specified decimal title version.\n");
 		printf("--decrypt=titlekey Decrypt the title stored in titledir, and use ctrclient-ncch to decrypt the NCCH contents. When '=<titlekey>' is specified, use the input titlekey to decrypt content instead of decrypting the tik titlekey.\n");
 		printf("--csv=<csv_filepath> Parse the input CSV, for the operation(s) specified via the other parameters. When just --csv is used, the CSV is read from stdin. For example, to dl+decrypt titles for a sysupdate via the yls8.mtheall.com site: curl \"<URL for CSV>\" | ctrclient-title ... --dltitle --decrypt --titlepath=<sysupdate outdir> --csv\n");
+		printf("--begintitle=<titleID> TitleID to begin download/decryption with, for the CSV.\n");
 		return 0;
 	}
 
@@ -693,6 +695,18 @@ int main(int argc, char *argv[])
 			use_csv = 1;
 			if(argv[argi][5] == '=')strncpy(csvpath, &argv[argi][6], 255);
 		}
+
+		if(strncmp(argv[argi], "--begintitle=", 13)==0)
+		{
+			if(strlen(&argv[argi][13]) != 16)
+			{
+				printf("Invalid titleID.\n");
+			}
+			else
+			{
+				sscanf(&argv[argi][13], "%016"PRIx64, &begintitleid);
+			}
+		}
 	}
 
 	if(serveradr[0]==0)return 0;
@@ -736,9 +750,12 @@ int main(int argc, char *argv[])
 		f = stdin;
 	}
 
+	found_start = 0;
 	titleversion_set = 1;
 	linei = 0;
 	memset(linebuf, 0, 1024);
+
+	if(!begintitleid)found_start = 1;
 
 	while(fgets(linebuf, 1023, f))
 	{
@@ -751,6 +768,13 @@ int main(int argc, char *argv[])
 
 			strptr = strtok(linebuf, ",");//TID
 			sscanf(strptr, "%016"PRIx64, &titleid);
+
+			if((begintitleid && !found_start) && titleid==begintitleid)
+			{
+				found_start = 1;
+			}
+
+			if(!found_start)continue;
 
 			strptr = strtok(NULL, ",");//region
 			memset(region, 0, 8);
