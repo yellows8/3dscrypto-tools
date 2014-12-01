@@ -8,7 +8,7 @@
 #include "ncch.h"
 
 unsigned int ncchoff = 0;
-int noromfs = 0;
+int noromfs = 0, enable_disasm = 0;
 ctrclient client;
 FILE *finput, *foutput;
 ctr_ncchheader ncch_hdr;
@@ -190,10 +190,13 @@ int decrypt_ncch()
 int run_ctrtool(char *ncchfn, char *prefix)
 {
 	int ret;
+	FILE *f;
+	u32 tmp;
 	char *home;
 	char keypath[256];
 	char romfs_cmd[256];
 	char sys_cmd[1024];
+	unsigned char tmpbuf[0x400];
 
 	memset(keypath, 0, 256);
 	memset(romfs_cmd, 0, 256);
@@ -218,9 +221,80 @@ int run_ctrtool(char *ncchfn, char *prefix)
 
 	if(noromfs)return 0;
 
-	memset(sys_cmd, 0, 256);
+	memset(sys_cmd, 0, 1024);
 	snprintf(sys_cmd, 1023, "ctrtool -v --verify -p --keyset=%s --romfsdir=%s_romfs %s.romfs > %s.romfs_info", keypath, prefix, prefix, prefix);
-	return system(sys_cmd);
+	ret = system(sys_cmd);
+	if(ret!=0)return ret;
+
+	if(enable_disasm)
+	{
+		printf("Disassembling ExeFS .code, if available...\n");
+
+		memset(tmpbuf, 0, 0x400);
+
+		f = fopen(ncchfn, "rb");
+		if(f==NULL)
+		{
+			printf("Failed to open decrypted ncch for reading, for disasm.\n");
+			return 1;
+		}
+
+		tmp = getle32(ncch_hdr.exefsoffset) * mediaunitsize;
+		if(tmp==0)
+		{
+			printf("NCCH doesn't have ExeFS, skipping disasm.\n");
+			fclose(f);
+			return 0;
+		}
+
+		fseek(f, tmp, SEEK_SET);
+
+		if(fread(tmpbuf, 1, 0x200, f) != 0x200)
+		{
+			printf("Failed to read ncch exefs-header, for disasm.\n");
+			fclose(f);
+			return 2;
+		}
+
+		if(strncmp((char*)tmpbuf, ".code", 5)!=0)
+		{
+			printf("NCCH doesn't have ExeFS:/.code, skipping disasm.\n");
+			fclose(f);
+			return 0;
+		}
+
+		if(getle32(ncch_hdr.extendedheadersize) == 0)
+		{
+			printf("NCCH doesn't have exheader, skipping disasm.\n");
+			fclose(f);
+			return 0;
+		}
+
+		fseek(f, 0x200, SEEK_SET);
+
+		if(fread(tmpbuf, 1, 0x400, f) != 0x400)
+		{
+			printf("Failed to read ncch exheader, for disasm.\n");
+			fclose(f);
+			return 2;
+		}
+
+		tmp = getle32(&tmpbuf[0x10]);
+
+		fclose(f);
+
+		memset(sys_cmd, 0, 1024);
+		snprintf(sys_cmd, 255, "arm-none-eabi-objdump -D -b binary -m arm --adjust-vma=0x%0x %s_exefs/code.bin > %s_ARM.s", tmp, prefix, prefix);
+		ret = system(sys_cmd);
+		if(ret!=0)return ret;
+
+		memset(sys_cmd, 0, 1024);
+		snprintf(sys_cmd, 255, "arm-none-eabi-objdump -D -b binary -m arm -M force-thumb --adjust-vma=0x%0x %s_exefs/code.bin > %s_THUMB.s", tmp, prefix, prefix);
+		ret = system(sys_cmd);
+		if(ret!=0)return ret;
+	}
+
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -242,6 +316,7 @@ int main(int argc, char *argv[])
 		printf("--input=<path> Input path for secure key NCCH\n");
 		printf("--output=<path> Output path for decrypted NCCH\n");
 		printf("--noromfs Skip decrypting the RomFS\n");
+		printf("--disasm Disassemble ExeFS .code with objdump\n");
 		printf("--ctrtoolprefix=<prefix> Run ctrtool with the decrypted NCCH, with the specified prefix for ExeFS, RomFS, and ctrtool stdout file redirect\n");
 		printf("--ncchoff=<hexoffset> Base offset for the NCCH in the input\n");
 		return 0;
@@ -260,6 +335,7 @@ int main(int argc, char *argv[])
 		if(strncmp(argv[argi], "--output=", 9)==0)strncpy(outfn, &argv[argi][9], 255);
 		if(strncmp(argv[argi], "--ctrtoolprefix=", 16)==0)strncpy(ctrtool_prefix, &argv[argi][16], 255);
 		if(strncmp(argv[argi], "--noromfs", 9)==0)noromfs = 1;
+		if(strncmp(argv[argi], "--disasm", 8)==0)enable_disasm = 1;
 		if(strncmp(argv[argi], "--ncchoff=", 10)==0)sscanf(&argv[argi][10], "%x", &ncchoff);
 	}
 

@@ -21,7 +21,7 @@ unsigned char intitlekey[16];
 int titleversion_set = 0;
 unsigned int titleversion = 0;
 
-int dltitle = 0, dectitle = 0;
+int dltitle = 0, dectitle = 0, disasm_title = 0;
 int noromfs = 0;
 
 int serveradr_set = 0;
@@ -115,12 +115,22 @@ int cdn_download(uint64_t titleid, char *titledir, char *name, char *path)
 {
 	int ret;
 	FILE *f;
+	struct stat filestat;
 	char url[256];
 
 	memset(url, 0, 256);
 
 	if(path[0]==0)snprintf(path, 255, "%s/%s", titledir, name);
 	snprintf(url, 255, "http://nus.cdn.c.shop.nintendowifi.net/ccs/download/%016"PRIx64"/%s", titleid, name);
+
+	if(strcmp(name, "cetk") == 0)
+	{
+		if(stat(path, &filestat)==0)
+		{
+			printf("cetk already exists locally, skipping download for it.\n");
+			return 0;
+		}
+	}
 
 	f = fopen(path, "wb");
 	if(f==NULL)
@@ -177,16 +187,19 @@ int decrypt_ncch(u32 contentid, char *titlepath)
 	char basepath[64];
 	char noromfs_cmd[16];
 	char serveradr_cmd[64];
+	char disasm_cmd[64];
 
 	memset(sys_cmd, 0, 1023);
 	memset(basepath, 0, 64);
 	memset(noromfs_cmd, 0, 16);
 	memset(serveradr_cmd, 0, 64);
+	memset(disasm_cmd, 0, 64);
 	snprintf(basepath, 63, "%s/%08x", titlepath, contentid);
 	if(noromfs)strncpy(noromfs_cmd, "--noromfs", 15);
 	if(serveradr_set)snprintf(serveradr_cmd, 63, "--serveradr=%s", serveradr);
+	if(disasm_title)snprintf(disasm_cmd, 63, "--disasm");
 
-	snprintf(sys_cmd, 1023, "ctrclient-ncch --input=%s.app --output=%s.bin --ctrtoolprefix=%s %s %s", basepath, basepath, basepath, noromfs_cmd, serveradr_cmd);
+	snprintf(sys_cmd, 1023, "ctrclient-ncch --input=%s.app --output=%s.bin --ctrtoolprefix=%s %s %s %s", basepath, basepath, basepath, noromfs_cmd, serveradr_cmd, disasm_cmd);
 	ret = system(sys_cmd);
 	return ret;
 }
@@ -616,6 +629,7 @@ int main(int argc, char *argv[])
 		printf("--tik=<path> Path to the ticket for decrypting the titlekey, this can be used multiple times to decrypt multiple tickets at once.\n");
 		printf("--dltitle Download a 3DS title.\n");
 		printf("--noromfs Pass the --noromfs option to ctrclient-ncch.\n");
+		printf("--disasm Pass the --disasm option to ctrclient-ncch.\n");
 		printf("--titleid=<titleID> TitleID for the title to process.\n");
 		printf("--titlepath=<path> Directory for the downloaded title(s), and the directory for the encrypted/decrypted title(Default is current directory). This directory is automatically created.\n");
 		printf("--titlever=<decimalver> Download the specified decimal title version.\n");
@@ -652,6 +666,10 @@ int main(int argc, char *argv[])
 		if(strncmp(argv[argi], "--noromfs", 9)==0)
 		{
 			noromfs = 1;
+		}
+		if(strncmp(argv[argi], "--disasm", 8)==0)
+		{
+			disasm_title = 1;
 		}
 
 		if(strncmp(argv[argi], "--titleid=", 10)==0)
