@@ -47,8 +47,15 @@ int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int
 		}
 		else if(cryptotype==2)
 		{
-			printf("Using v7.0 NCCH crypto keyslot.\n");
-			if(!ctrclient_aes_select_key(&client, 0x25))return 1;
+			printf("Using new NCCH crypto keyslot.\n");
+			if(use_newncchcrypto==1)
+			{
+				if(!ctrclient_aes_select_key(&client, 0x25))return 1;
+			}
+			else if(use_newncchcrypto==2)
+			{
+				if(!ctrclient_aes_select_key(&client, 0x18))return 1;
+			}
 		}
 	}
 
@@ -224,7 +231,8 @@ int run_ctrtool(char *ncchfn, char *prefix)
 	memset(sys_cmd, 0, 1024);
 	snprintf(sys_cmd, 1023, "ctrtool -v --verify -p --keyset=%s --romfsdir=%s_romfs %s.romfs > %s.romfs_info", keypath, prefix, prefix, prefix);
 	ret = system(sys_cmd);
-	if(ret!=0)return ret;
+	if(ret==-1)return ret;
+	//if(ret!=0)return ret;
 
 	if(enable_disasm)
 	{
@@ -391,7 +399,10 @@ int main(int argc, char *argv[])
 	if(ncch_hdr.flags[3])
 	{
 		use_newncchcrypto = 1;
-		printf("This NCCH uses the v7.0 NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
+		if(ncch_hdr.flags[3]==0x0a)use_newncchcrypto = 2;
+
+		if(use_newncchcrypto==1)printf("This NCCH uses the v7.0 NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
+		if(use_newncchcrypto==2)printf("This NCCH uses the New3DS NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
 	}
 
 	mediaunitsize = 1 << (ncch_hdr.flags[6] + 9);
@@ -416,12 +427,25 @@ int main(int argc, char *argv[])
 
 	if(use_newncchcrypto)
 	{
-		if(!ctrclient_aes_set_ykey(&client, 0x25, ncch_hdr.signature))
+		if(use_newncchcrypto == 1)
 		{
-			free(buffer);
-			fclose(finput);
-			fclose(foutput);
-			return 1;
+			if(!ctrclient_aes_set_ykey(&client, 0x25, ncch_hdr.signature))
+			{
+				free(buffer);
+				fclose(finput);
+				fclose(foutput);
+				return 1;
+			}
+		}
+		else if(use_newncchcrypto == 2)
+		{
+			if(!ctrclient_aes_set_ykey(&client, 0x18, ncch_hdr.signature))
+			{
+				free(buffer);
+				fclose(finput);
+				fclose(foutput);
+				return 1;
+			}
 		}
 	}
 
