@@ -45,7 +45,7 @@ int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int
 			printf("Using regular NCCH crypto keyslot.\n");
 			if(!ctrclient_aes_select_key(&client, 0x2c))return 1;
 		}
-		else if(cryptotype==2)
+		else
 		{
 			printf("Using new NCCH crypto keyslot.\n");
 			if(use_newncchcrypto==1)
