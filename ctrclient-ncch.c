@@ -182,6 +182,16 @@ int decrypt_ncch()
 	ret = write_section("Plain-section", 0, getle32(ncch_hdr.plainregionoffset), getle32(ncch_hdr.plainregionsize)*mediaunitsize, 0, 0);
 	if(ret)return ret;
 
+	if(getle32(ncch_hdr.logoregionsize))
+	{
+		ret = write_section("Logo-region", 0, getle32(ncch_hdr.logoregionoffset), getle32(ncch_hdr.logoregionsize)*mediaunitsize, 0, 0);
+		if(ret)return ret;
+	}
+	else
+	{
+		printf("The logo region doesn't exist in this NCCH.\n");
+	}
+
 	ret = decrypt_exefs();
 	if(ret)return ret;
 	

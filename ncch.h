@@ -36,7 +36,8 @@ typedef struct
 	u8 flags[8];
 	u8 plainregionoffset[4];
 	u8 plainregionsize[4];
-	u8 reserved3[8];
+	u8 logoregionoffset[4];
+	u8 logoregionsize[4];
 	u8 exefsoffset[4];
 	u8 exefssize[4];
 	u8 exefshashregionsize[4];
