@@ -19,7 +19,7 @@ int use_newncchcrypto = 0;
 int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int cryptotype)
 {
 	unsigned int sz;
-	unsigned int chunksize = CHUNKMAXSIZE;
+	unsigned int chunksize = CHUNKMAXSIZE, cryptsize;
 	int i;
 	unsigned int curpos = 0;
 	unsigned char counter[16];
@@ -66,6 +66,8 @@ int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int
 	{
 		if(size - curpos < chunksize)chunksize = size - curpos;
 
+		cryptsize = (chunksize + 0xf) & ~0xf;
+
 		memset(buffer, 0, chunksize);
 		if((sz = fread(buffer, 1, chunksize, finput)) != chunksize)
 		{
@@ -81,7 +83,7 @@ int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int
 		}
 		if(cryptotype)printf("Chunk pos %x size %x\n", curpos, chunksize);
 
-		if (cryptotype && !ctrclient_aes_ctr_crypt(&client, buffer, chunksize))
+		if (cryptotype && !ctrclient_aes_ctr_crypt(&client, buffer, cryptsize))
 		{
 			return 1;
 		}
@@ -152,7 +154,7 @@ int decrypt_exefs()
 			if(strncmp(tmpstr, "icon", 4)==0 || strncmp(tmpstr, "banner", 6)==0)type = 1;
 		}
 
-		size = (getle32(&exefshdr[pos+12]) + 0xf) & ~0xf;
+		size = getle32(&exefshdr[pos+12]);
 
 		ret = write_section(str, getle32(&exefshdr[pos+8]) + 0x200, getle32(ncch_hdr.exefsoffset) + (getle32(&exefshdr[pos+8])/mediaunitsize) + 1, size, NCCHTYPE_EXEFS, type);
 		if(ret)return ret;
