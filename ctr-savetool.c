@@ -129,7 +129,8 @@ int extdata_genmac(ctrclient *client, u8 *header, u8 *outmac, unsigned long long
 	memset(exthash, 0, 0x20);
 	memset(hashblk, 0, 0x14);
 
-	memcpy(&hashblk[0], &imageID, 8);
+	memcpy(&hashblk[0], &saveID, 8);
+	hashblk[0x8] = 1;//non-Quota.dat
 	memcpy(&hashblk[0xc], &imageID, 8);
 
 	savegame_genhash(exthash, header, 0x100, "CTR-EXT0", hashblk, 0x14);
@@ -509,7 +510,7 @@ int main(int argc, char *argv[])
 		printf("--decblocks Decrypt the second and third AES blocks from the input savegame with AES-CBC IV=0, for retrieving the CTR used for each block.\n");
 		printf("--gamecard Process a gamecard savegame, this is the default save-type.\n");
 		printf("--nandsave Process a NAND savegame, only MAC generation is supported for this.\n");
-		printf("--extdata Process an extdata image.\n");
+		printf("--extdata Process an extdata image, MAC generation is not supported for Quota.dat.\n");
 		printf("--sdsave Process a SD /title savegame.\n");
 		printf("--dbsave=<sd|nand> Process a DB /dbs extdata image.\n");
 		printf("\n");
