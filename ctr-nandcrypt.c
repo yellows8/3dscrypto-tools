@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
 		printf("--size=<hexsize> Xorpad size\n");
 		printf("--keyslot=<hexkeyslot> The keyslot to be used\n");
 		printf("--cid=<hexcid> The NAND CID to be used\n");
-		printf("--ctr=<hexctr> The NAND CID to be used\n");
+		printf("--ctr=<hexctr> The NAND CTR to be used\n");
 		return 0;
 	}
 
