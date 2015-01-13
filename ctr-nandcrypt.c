@@ -93,10 +93,17 @@ int main(int argc, char *argv[])
 	memset(imagefn, 0, 256);
 	memset(serveradr, 0, 256);
 
-	printf("ctr-nandcrypt by yellows8\n");
-
 	if(argc==1)
 	{
+		printf("ctr-nandcrypt by yellows8\n");
+		printf("Create xorpads for NAND en-/decryption, options:\n");
+		printf("--serveradr=<addr> Use the specified server address instead of the default address.\n");
+		printf("--imagefn=<path> Output path for xorpad file\n");
+		printf("--imageoff=<hexoffset> Base NAND offset\n");
+		printf("--size=<hexsize> Xorpad size\n");
+		printf("--keyslot=<hexkeyslot> The keyslot to be used\n");
+		printf("--cid=<hexcid> The NAND CID to be used\n");
+		printf("--ctr=<hexctr> The NAND CID to be used\n");
 		return 0;
 	}
 
