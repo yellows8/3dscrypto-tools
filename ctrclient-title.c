@@ -11,7 +11,7 @@
 #include "tmd.h"
 
 #include "polarssl/aes.h"
-#include "polarssl/sha2.h"
+#include <openssl/sha.h>
 
 #define _FILE_OFFSET_BITS 64 /* for pre libcurl 7.19.0 curl_off_t magic */
 #include <curl/curl.h>
@@ -23,9 +23,11 @@ unsigned int titleversion = 0;
 
 int dltitle = 0, dectitle = 0, disasm_title = 0;
 int noromfs = 0;
+int disablencch = 0;
 
 int serveradr_set = 0;
 char serveradr[256];
+char commonkey_path[256];
 
 int tikdecrypt_titlekey(char *path, unsigned char *titlekey);
 
@@ -221,6 +223,7 @@ int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *ch
 	u32 contentid;
 	uint64_t contentsize;
 	u32 contentsz_aligned;
+	u32 hashsize;
 
 	memset(titlekey, 0, 16);
 	if(intitlekey_set)
@@ -316,11 +319,20 @@ int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *ch
 		fclose(f);
 
 		memset(calchash, 0, 32);
-		sha2(buffer, (int)contentsize, calchash, 0);
+		if((getbe16(chunks[index].type) & 0x2000) == 0)//assumption going by wiiu tmd(s)
+		{
+			hashsize = 0x20;
+			SHA256(buffer, (int)contentsize, calchash);
+		}
+		else
+		{
+			hashsize = 0x14;
+			SHA1(buffer, (int)contentsize, calchash);
+		}
 		free(buffer);
 
 		printf("Content hash: ");
-		if(memcmp(chunks[index].hash, calchash, 32)==0)
+		if(memcmp(chunks[index].hash, calchash, hashsize)==0)
 		{
 			printf("GOOD!\n");
 		}
@@ -333,15 +345,18 @@ int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *ch
 		printf("\n");
 	}
 
-	for(index=0; index<total_contents; index++)
+	if(disablencch==0)
 	{
-		contentid = getbe32(chunks[index].id);
-
-		ret = decrypt_ncch(contentid, titlepath);
-		if(ret!=0)
+		for(index=0; index<total_contents; index++)
 		{
-			printf("Failed to decrypt contentID %08x NCCH.\n", contentid);
-			return ret;
+			contentid = getbe32(chunks[index].id);
+
+			ret = decrypt_ncch(contentid, titlepath);
+			if(ret!=0)
+			{
+				printf("Failed to decrypt contentID %08x NCCH.\n", contentid);
+				return ret;
+			}
 		}
 	}
 
@@ -495,6 +510,24 @@ int get_key(const char *name, uint8_t *key, uint32_t len)//based on the save_ext
 	return 0;
 }
 
+int load_key(const char *path, uint8_t *key, uint32_t len)
+{
+	FILE *fp = fopen(path, "rb");
+	if (fp == 0)
+	{
+		return -1;
+	}
+
+	if (fread(key, len, 1, fp) != 1)
+	{
+		fclose(fp);
+		return -1;
+	}
+	fclose(fp);
+
+	return 0;
+}
+
 int decrypt_titlekey(unsigned char *ticket, unsigned char *titlekey)
 {
 	ctrclient client;
@@ -528,10 +561,22 @@ int decrypt_titlekey(unsigned char *ticket, unsigned char *titlekey)
 		snprintf(keyname, 15, "common-key");
 	}
 
-	if(get_key(keyname, key, 16)!=0)
+	if(commonkey_path[0]==0)
 	{
-		printf("Failed to load %s\n", keyname);
-		return 1;
+		if(get_key(keyname, key, 16)!=0)
+		{
+			printf("Failed to load %s\n", keyname);
+			return 1;
+		}
+	}
+	else
+	{
+		if(load_key(commonkey_path, key, 16)!=0)
+		{
+			printf("Failed to load %s\n", commonkey_path);
+			return 1;
+		}
+		normalkey = 1;
 	}
 
 	if(normalkey)
@@ -634,6 +679,8 @@ int main(int argc, char *argv[])
 		printf("--titlepath=<path> Directory for the downloaded title(s), and the directory for the encrypted/decrypted title(Default is current directory). This directory is automatically created.\n");
 		printf("--titlever=<decimalver> Download the specified decimal title version.\n");
 		printf("--decrypt=titlekey Decrypt the title stored in titledir, and use ctrclient-ncch to decrypt the NCCH contents. When '=<titlekey>' is specified, use the input titlekey to decrypt content instead of decrypting the tik titlekey.\n");
+		printf("--decwithcommonkey=path When --decrypt is used, load normal commonkey from path.\n");
+		printf("--disablencch Don't run ctrclient-ncch when --decrypt was used.\n");
 		printf("--csv=<csv_filepath> Parse the input CSV, for the operation(s) specified via the other parameters. When just --csv is used, the CSV is read from stdin. For example, to dl+decrypt titles for a sysupdate via the yls8.mtheall.com site: curl \"<URL for CSV>\" | ctrclient-title ... --dltitle --decrypt --titlepath=<sysupdate outdir> --csv\n");
 		printf("--begintitle=<titleID> TitleID to begin download/decryption with, for the CSV.\n");
 		return 0;
@@ -645,6 +692,7 @@ int main(int argc, char *argv[])
 	memset(titlepath, 0, 256);
 	memset(titlepathtmp, 0, 256);
 	memset(csvpath, 0, 256);
+	memset(commonkey_path, 0, sizeof(commonkey_path));
 
 	for(argi=1; argi<argc; argi++)
 	{
@@ -706,6 +754,16 @@ int main(int argc, char *argv[])
 
 				intitlekey_set = 1;
 			}
+		}
+
+		if(strncmp(argv[argi], "--disablencch", 13)==0)
+		{
+			disablencch = 1;
+		}
+
+		if(strncmp(argv[argi], "--decwithcommonkey=", 19)==0)
+		{
+			strncpy(commonkey_path, &argv[argi][19], sizeof(commonkey_path)-1);
 		}
 
 		if(strncmp(argv[argi], "--csv", 5)==0)
