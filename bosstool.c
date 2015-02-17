@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 	unsigned char ctr[16];
 
 	int argi;
-	unsigned int bufsz = 0;
+	unsigned int bufsz = 0, tmpsz, allocsize;
 	unsigned int payloadsz = 0;
 	FILE *f;
 	struct stat filestat;
@@ -79,7 +79,8 @@ int main(int argc, char *argv[])
 	if(stat(infn, &filestat)==-1)return 1;
 
 	bufsz = filestat.st_size;
-	buffer = (unsigned char*)malloc(bufsz);
+	allocsize = (bufsz + 0xf) & ~0xf;
+	buffer = (unsigned char*)malloc(allocsize);
 	if(buffer==NULL)return 1;
 	memset(buffer, 0, bufsz);
 
@@ -122,7 +123,10 @@ int main(int argc, char *argv[])
 
 		if(payloadsz)bufsz = 0x176 + payloadsz;
 
-		if(decrypt_data(&client, &buffer[0x28], bufsz-0x28)!=0)
+		tmpsz = bufsz-0x28;
+		if(tmpsz & 0xf)tmpsz = (tmpsz + 0xf) & ~0xf;
+
+		if(decrypt_data(&client, &buffer[0x28], tmpsz)!=0)
 		{
 			free(buffer);
 			return 1;
