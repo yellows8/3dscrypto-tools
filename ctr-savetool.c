@@ -285,6 +285,7 @@ int save_genxorpad(ctrclient *client, unsigned int keyslot, unsigned char *ctr, 
 {
 	FILE *f;
 	unsigned char *xorpad_buf;
+	unsigned int tmpsize;
 
 	xorpad_buf = (unsigned char*)malloc(xorpad_size);
 	if(xorpad_buf == NULL)
@@ -301,8 +302,11 @@ int save_genxorpad(ctrclient *client, unsigned int keyslot, unsigned char *ctr, 
 	if(!ctrclient_aes_ctr_crypt(client, xorpad_buf, xorpad_size))
 		return 1;
 
+	tmpsize = xorpad_size;
+	if(tmpsize>0x200)tmpsize = 0x200;
+
 	printf("Generated xorpad:\n");
-	hexdump(xorpad_buf, 0x200);
+	hexdump(xorpad_buf, tmpsize);
 
 	if(xorpad_path[0])
 	{
@@ -522,7 +526,7 @@ int main(int argc, char *argv[])
 		printf("--imgpath=<path> SD card path to generate the CTR from.\n");
 		printf("--exefscodehash=<hex> Hash of the ExeFS .code from the main CXI ExeFS header, for the v6.0 save crypto.\n");
 		printf("--genv60keys=<rsamodulopath> Calculate the v6.0/v7.0 keys for savedata keyY generation and NCCH crypto. If the input file is larger than 0x100-bytes, this will then calculate the keys using the modulus loaded from each byte in the input file.\n");
-		printf("--rsaexponent=<big-endian hex u32 exponent> Sets the RSA exponent used for the above v6.0+ key generation.\n");
+		printf("--rsaexponent=<big-endian hex u32 exponent> Sets the RSA exponent used for the above v6.0+ key generation. The value of this parameter can also be <@filepath>, to load the exponent from a file.\n");
 	}
 
 	for(argi=1; argi<argc; argi++)
@@ -723,14 +727,38 @@ int main(int argc, char *argv[])
 
 		if(strncmp(argv[argi], "--rsaexponent=", 14)==0)
 		{
-			tmp = 0;
-			sscanf(&argv[argi][14], "%x", &tmp);
-			rsaexponent[0xfc + 0] = (tmp >> 24) & 0xff;
-			rsaexponent[0xfc + 1] = (tmp >> 16) & 0xff;
-			rsaexponent[0xfc + 2] = (tmp >> 8) & 0xff;
-			rsaexponent[0xfc + 3] = tmp & 0xff;
+			if(argv[argi][14]!='@')
+			{
+				tmp = 0;
+				sscanf(&argv[argi][14], "%x", &tmp);
+				rsaexponent[0xfc + 0] = (tmp >> 24) & 0xff;
+				rsaexponent[0xfc + 1] = (tmp >> 16) & 0xff;
+				rsaexponent[0xfc + 2] = (tmp >> 8) & 0xff;
+				rsaexponent[0xfc + 3] = tmp & 0xff;
 
-			rsaexponent_set = 1;
+				rsaexponent_set = 1;
+			}
+			else
+			{
+				f = fopen(&argv[argi][15], "rb");
+				if(f)
+				{
+					if(fread(rsaexponent, 1, 0x100, f)==0x100)
+					{
+						rsaexponent_set = 1;
+					}
+					else
+					{
+						printf("Failed to fully read the RSA exponent.\n");
+					}
+
+					fclose(f);
+				}
+				else
+				{
+					printf("Failed to open the input RSA exponent.\n");
+				}
+			}
 		}
 	}
 
@@ -807,8 +835,12 @@ int main(int argc, char *argv[])
 		{
 			printf("No RSA exponent set, using default exponent: 65537.\n");
 
-			tmp = 0x00010001; 
-			memcpy(&rsaexponent[0xfc], &tmp, 4);
+			tmp = 0x00010001;
+
+			rsaexponent[0xfc + 0] = (tmp >> 24) & 0xff;
+			rsaexponent[0xfc + 1] = (tmp >> 16) & 0xff;
+			rsaexponent[0xfc + 2] = (tmp >> 8) & 0xff;
+			rsaexponent[0xfc + 3] = tmp & 0xff;
 		}
 		
 		i = 0;
