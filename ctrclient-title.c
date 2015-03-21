@@ -21,7 +21,7 @@ unsigned char intitlekey[16];
 int titleversion_set = 0;
 unsigned int titleversion = 0;
 
-int dltitle = 0, dectitle = 0, disasm_title = 0;
+int dltitle = 0, packcia = 0, dectitle = 0, disasm_title = 0;
 int noromfs = 0;
 int disablencch = 0;
 
@@ -94,6 +94,17 @@ int http_request(char *url, FILE *outfile)
   ret = curl_easy_perform(hnd);
   curl_easy_cleanup(hnd);
   return (int)ret;
+}
+
+int pack_cia(uint64_t titleid, char *titlepath)
+{
+	int ret;
+	char sys_cmd[1024];
+
+
+	snprintf(sys_cmd, 1023, "make_cdn_cia %s %s/%016"PRIx64".cia", titlepath, titlepath, titleid);
+	ret = system(sys_cmd);
+	return ret;
 }
 
 ctr_tmd_body *tmd_get_body(unsigned char *tmdbuf) 
@@ -480,6 +491,16 @@ int download_title(uint64_t titleid, char *titlepath)
 		return ret;
 	}
 
+	if(packcia)
+	{
+		ret = pack_cia(titleid, titlepath);
+		if(ret!=0)
+		{
+			printf("Failed to pack CIA: %d\n", ret);
+			return ret;
+		}
+	}
+
 	return 0;
 }
 
@@ -673,6 +694,7 @@ int main(int argc, char *argv[])
 		printf("--serveradr=<addr> Server address to use.\n");
 		printf("--tik=<path> Path to the ticket for decrypting the titlekey, this can be used multiple times to decrypt multiple tickets at once.\n");
 		printf("--dltitle Download a 3DS title.\n");
+		printf("--packcia pack a 3DS title into a CIA.\n");
 		printf("--noromfs Pass the --noromfs option to ctrclient-ncch.\n");
 		printf("--disasm Pass the --disasm option to ctrclient-ncch.\n");
 		printf("--titleid=<titleID> TitleID for the title to process.\n");
@@ -710,6 +732,10 @@ int main(int argc, char *argv[])
 		if(strncmp(argv[argi], "--dltitle", 9)==0)
 		{
 			dltitle = 1;
+		}
+		if(strncmp(argv[argi], "--packcia", 9)==0)
+		{
+			packcia = 1;
 		}
 		if(strncmp(argv[argi], "--noromfs", 9)==0)
 		{
