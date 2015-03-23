@@ -864,11 +864,14 @@ int main(int argc, char *argv[])
 		strptr = strchr(linebuf, '\n');
 		if(strptr)*strptr = 0;
 
-		if(linei)//This assumes that the CSV has this format: TitleID,Region,Title version<,...>
+		if(linei)//The CSV should have the following format: TitleID,Region,Title version(s)<,...>
 		{
-			//printf("Line: %s\n", linebuf);
-
 			strptr = strtok(linebuf, ",");//TID
+			if(strptr==NULL)
+			{
+				printf("Skipping invalid line.\n");
+				continue;
+			}
 			sscanf(strptr, "%016"PRIx64, &titleid);
 
 			if((begintitleid && !found_start) && titleid==begintitleid)
@@ -879,36 +882,54 @@ int main(int argc, char *argv[])
 			if(!found_start)continue;
 
 			strptr = strtok(NULL, ",");//region
+			if(strptr==NULL)
+			{
+				printf("Skipping invalid line.\n");
+				continue;
+			}
 			memset(region, 0, 8);
 			strncpy(region, strptr, 7);
 
 			strptr = strtok(NULL, ",");//title-version
-			if(strptr[0] == 'v')strptr++;
-			sscanf(strptr, "%u", &titleversion);
-
-			memset(titlepathtmp, 0, 256);
-			snprintf(titlepathtmp, 255, "%s/%016"PRIx64, titlepath, titleid);
-			makedir(titlepathtmp);
-
-			pos = strlen(titlepathtmp);
-			snprintf(&titlepathtmp[pos], 255 - pos, "/%s", region);
-			makedir(titlepathtmp);
-
-			pos = strlen(titlepathtmp);
-			snprintf(&titlepathtmp[pos], 255 - pos, "/v%u", titleversion);
-			makedir(titlepathtmp);
-
-			printf("titleID: %016"PRIx64" region: %s titlever: %u. path: %s\n", titleid, region, titleversion, titlepathtmp);
-
-			if(dltitle)
+			if(strptr==NULL)
 			{
-				ret = download_title(titleid, titlepathtmp);
-				if(ret!=0)return ret;
+				printf("Skipping invalid line.\n");
+				continue;
 			}
-			else if(dectitle)
+
+			strptr = strtok(strptr, " ");
+
+			while(strptr)
 			{
-				ret = parse_tmd(titleid, titlepathtmp);
-				if(ret!=0)return ret;
+				if(strptr[0] == 'v')strptr++;
+				sscanf(strptr, "%u", &titleversion);
+
+				memset(titlepathtmp, 0, 256);
+				snprintf(titlepathtmp, 255, "%s/%016"PRIx64, titlepath, titleid);
+				makedir(titlepathtmp);
+
+				pos = strlen(titlepathtmp);
+				snprintf(&titlepathtmp[pos], 255 - pos, "/%s", region);
+				makedir(titlepathtmp);
+
+				pos = strlen(titlepathtmp);
+				snprintf(&titlepathtmp[pos], 255 - pos, "/v%u", titleversion);
+				makedir(titlepathtmp);
+
+				printf("titleID: %016"PRIx64" region: %s titlever: %u. path: %s\n", titleid, region, titleversion, titlepathtmp);
+
+				if(dltitle)
+				{
+					ret = download_title(titleid, titlepathtmp);
+					if(ret!=0)return ret;
+				}
+				else if(dectitle)
+				{
+					ret = parse_tmd(titleid, titlepathtmp);
+					if(ret!=0)return ret;
+				}
+
+				strptr = strtok(NULL, " ");
 			}
 		}
 
