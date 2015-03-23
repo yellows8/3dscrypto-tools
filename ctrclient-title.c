@@ -683,6 +683,7 @@ int main(int argc, char *argv[])
 	unsigned char titlekey[16];
 	char titlepath[256];
 	char titlepathtmp[256];
+	char titlepathbase[256];
 	char csvpath[256];
 	char linebuf[1024];
 	char region[8];
@@ -897,7 +898,22 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
+
 			strptr = strtok(strptr, " ");
+
+			if(strptr==NULL)
+			{
+				printf("Skipping invalid line.\n");
+				continue;
+			}
+
+			memset(titlepathbase, 0, 256);
+			snprintf(titlepathbase, 255, "%s/%016"PRIx64, titlepath, titleid);
+			makedir(titlepathbase);
+
+			pos = strlen(titlepathbase);
+			snprintf(&titlepathbase[pos], 255 - pos, "/%s", region);
+			makedir(titlepathbase);
 
 			while(strptr)
 			{
@@ -905,13 +921,7 @@ int main(int argc, char *argv[])
 				sscanf(strptr, "%u", &titleversion);
 
 				memset(titlepathtmp, 0, 256);
-				snprintf(titlepathtmp, 255, "%s/%016"PRIx64, titlepath, titleid);
-				makedir(titlepathtmp);
-
-				pos = strlen(titlepathtmp);
-				snprintf(&titlepathtmp[pos], 255 - pos, "/%s", region);
-				makedir(titlepathtmp);
-
+				strncpy(titlepathtmp, titlepathbase, 255);
 				pos = strlen(titlepathtmp);
 				snprintf(&titlepathtmp[pos], 255 - pos, "/v%u", titleversion);
 				makedir(titlepathtmp);
