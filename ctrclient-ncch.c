@@ -412,9 +412,18 @@ int main(int argc, char *argv[])
 	{
 		use_newncchcrypto = 1;
 		if(ncch_hdr.flags[3]==0x0a)use_newncchcrypto = 2;
+		if(ncch_hdr.flags[3]==0x0b)use_newncchcrypto = 3;
 
 		if(use_newncchcrypto==1)printf("This NCCH uses the v7.0 NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
 		if(use_newncchcrypto==2)printf("This NCCH uses the New3DS NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
+		if(use_newncchcrypto==3)
+		{
+			printf("This NCCH uses the New3DS NCCH crypto added with v9.6, aborting.\n");
+			free(buffer);
+			fclose(finput);
+			fclose(foutput);
+			return 0;
+		}
 	}
 
 	mediaunitsize = 1 << (ncch_hdr.flags[6] + 9);
