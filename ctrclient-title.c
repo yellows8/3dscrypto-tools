@@ -356,7 +356,11 @@ int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *ch
 		printf("\n");
 	}
 
-	if(disablencch==0)
+	if((titleid>>36) == 0x4800)
+	{
+		printf("Skipping using ctrclient-ncch since this is a TWL title.\n");
+	}
+	else if(disablencch==0)
 	{
 		for(index=0; index<total_contents; index++)
 		{

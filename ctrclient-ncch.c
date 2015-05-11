@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <openssl/sha.h>
 
 #include "ctrclient.h"
 #include "utils.h"
@@ -14,7 +15,8 @@ FILE *finput, *foutput;
 ctr_ncchheader ncch_hdr;
 u32 mediaunitsize = 0;
 unsigned char *buffer;
-int use_newncchcrypto = 0;
+int use_newncchcrypto = 0, keyY_method = 0;
+unsigned int newncchcrypto_keyslot = 0;
 
 int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int cryptotype)
 {
@@ -48,14 +50,7 @@ int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int
 		else
 		{
 			printf("Using new NCCH crypto keyslot.\n");
-			if(use_newncchcrypto==1)
-			{
-				if(!ctrclient_aes_select_key(&client, 0x25))return 1;
-			}
-			else if(use_newncchcrypto==2)
-			{
-				if(!ctrclient_aes_select_key(&client, 0x18))return 1;
-			}
+			if(!ctrclient_aes_select_key(&client, newncchcrypto_keyslot))return 1;
 		}
 	}
 
@@ -319,9 +314,17 @@ int run_ctrtool(char *ncchfn, char *prefix)
 
 int main(int argc, char *argv[])
 {
+	int i;
 	int ret;
 	int argi;
 	u16 version;
+	int contentlockseed_set = 0;
+	unsigned int tmp=0;
+
+	unsigned char newkeyslot_keyY[0x10];
+	unsigned char calchash[0x20];
+	unsigned char hashdata[0x20];
+	unsigned char contentlockseed[0x10];
 
 	char infn[256];
 	char outfn[256];
@@ -339,6 +342,7 @@ int main(int argc, char *argv[])
 		printf("--disasm Disassemble ExeFS .code with objdump\n");
 		printf("--ctrtoolprefix=<prefix> Run ctrtool with the decrypted NCCH, with the specified prefix for ExeFS, RomFS, and ctrtool stdout file redirect\n");
 		printf("--ncchoff=<hexoffset> Base offset for the NCCH in the input\n");
+		printf("--contentlockseed=<0x10-bytes of hex> This is the seed for the last 0x10-bytes used when hashing data for the NCCH keyY, required when the NCCH uses the keyY generation method for non-0x2c-keyslots added with v9.6.\n");
 		return 0;
 	}
 
@@ -347,6 +351,7 @@ int main(int argc, char *argv[])
 	memset(infn, 0, 256);
 	memset(outfn, 0, 256);
 	memset(ctrtool_prefix, 0, 256);
+	memset(contentlockseed, 0, 0x10);
 
 	for(argi=1; argi<argc; argi++)
 	{
@@ -357,6 +362,24 @@ int main(int argc, char *argv[])
 		if(strncmp(argv[argi], "--noromfs", 9)==0)noromfs = 1;
 		if(strncmp(argv[argi], "--disasm", 8)==0)enable_disasm = 1;
 		if(strncmp(argv[argi], "--ncchoff=", 10)==0)sscanf(&argv[argi][10], "%x", &ncchoff);
+
+		if(strncmp(argv[argi], "--contentlockseed=", 18)==0)
+		{
+			if(strlen(argv[argi]) == 18 + 0x10*2)
+			{
+				contentlockseed_set = 1;
+
+				for(i=0; i<0x10; i++)
+				{
+					sscanf(&argv[argi][18 + i*2], "%02x", &tmp);
+					contentlockseed[i] = tmp;
+				}
+			}
+			else
+			{
+				printf("Invalid input for contentlockseed.\n");
+			}
+		}
 	}
 
 	if(infn[0]==0 || outfn[0]==0 || serveradr[0]==0)return 1;
@@ -410,20 +433,36 @@ int main(int argc, char *argv[])
 	use_newncchcrypto = 0;
 	if(ncch_hdr.flags[3])
 	{
-		use_newncchcrypto = 1;
-		if(ncch_hdr.flags[3]==0x0a)use_newncchcrypto = 2;
-		if(ncch_hdr.flags[3]==0x0b)use_newncchcrypto = 3;
-
-		if(use_newncchcrypto==1)printf("This NCCH uses the v7.0 NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
-		if(use_newncchcrypto==2)printf("This NCCH uses the New3DS NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
-		if(use_newncchcrypto==3)
+		if(ncch_hdr.flags[3]==0x01)
 		{
-			printf("This NCCH uses the New3DS NCCH crypto added with v9.6, aborting.\n");
-			free(buffer);
-			fclose(finput);
-			fclose(foutput);
-			return 0;
+			use_newncchcrypto = 1;
+			newncchcrypto_keyslot = 0x25;
+			if(use_newncchcrypto==1)printf("This NCCH uses the v7.0 NCCH crypto, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
 		}
+		else if(ncch_hdr.flags[3]==0x0a)
+		{
+			use_newncchcrypto = 2;
+			newncchcrypto_keyslot = 0x18;
+			printf("This NCCH uses the New3DS NCCH crypto implemented in Process9 v9.3, the sections using that will be decrypted with the seperate keyslot needed for that.\n");
+		}
+		else if(ncch_hdr.flags[3]==0x0b)
+		{
+			use_newncchcrypto = 3;
+			newncchcrypto_keyslot = 0x1B;
+			printf("This NCCH uses the New3DS NCCH crypto added with v9.6.\n");
+		}
+		else
+		{
+			printf("Unsupported crypto-flag: 0x%02x.\n", ncch_hdr.flags[3]);
+			return 3;
+		}
+	}
+
+	keyY_method = 0;
+	if(ncch_hdr.flags[7] & 0x20)
+	{
+		keyY_method = 1;
+		printf("This NCCH uses the v9.6 NCCH keyY generation method for the non-0x2c-keyslots.\n");
 	}
 
 	mediaunitsize = 1 << (ncch_hdr.flags[6] + 9);
@@ -437,6 +476,24 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	if(!keyY_method)
+	{
+		memcpy(newkeyslot_keyY, ncch_hdr.signature, 0x10);
+	}
+	else
+	{
+		if(!contentlockseed_set)
+		{
+			printf("The --contentlockseed option must be used since this NCCH uses the v9.6 NCCH keyY generation.\n");
+			return 2;
+		}
+
+		memset(hashdata, 0, 0x20);
+		memcpy(hashdata, ncch_hdr.signature, 0x10);
+		memcpy(&hashdata[0x10], contentlockseed, 0x10);
+		SHA256(hashdata, 0x20, calchash);
+		memcpy(newkeyslot_keyY, calchash, 0x10);
+	}
 
 	if(!ctrclient_aes_set_ykey(&client, 0x2c, ncch_hdr.signature))
 	{
@@ -448,25 +505,12 @@ int main(int argc, char *argv[])
 
 	if(use_newncchcrypto)
 	{
-		if(use_newncchcrypto == 1)
+		if(!ctrclient_aes_set_ykey(&client, newncchcrypto_keyslot, newkeyslot_keyY))
 		{
-			if(!ctrclient_aes_set_ykey(&client, 0x25, ncch_hdr.signature))
-			{
-				free(buffer);
-				fclose(finput);
-				fclose(foutput);
-				return 1;
-			}
-		}
-		else if(use_newncchcrypto == 2)
-		{
-			if(!ctrclient_aes_set_ykey(&client, 0x18, ncch_hdr.signature))
-			{
-				free(buffer);
-				fclose(finput);
-				fclose(foutput);
-				return 1;
-			}
+			free(buffer);
+			fclose(finput);
+			fclose(foutput);
+			return 1;
 		}
 	}
 
