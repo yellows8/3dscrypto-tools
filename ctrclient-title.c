@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <inttypes.h>
 
 #include "ctrclient.h"
@@ -1038,18 +1039,22 @@ int main(int argc, char *argv[])
 	int titleid_set = 0, found_start = 0;
 	int pos;
 	unsigned int tmp=0;
-	int use_csv = 0, csv_versionhandling = 0;
+	int use_csv = 0, csv_versionhandling = 0, disabletitledups = 0;
 	int enable_settingsloading = 1;
 	uint64_t titleid = 0;
 	uint64_t begintitleid = 0;
 	FILE *f;
-	char *strptr, *nextstrptr;
+	char *strptr, *nextstrptr, *strptr2, *tidstr;
+	char *csvbuf = NULL;
+	size_t csvbufsize = 0, csvbuf_newsize = 0;
 	unsigned char titlekey[16];
 	char titlepath[256];
 	char titlepathtmp[256];
 	char titlepathbase[256];
 	char csvpath[256];
 	char linebuf[1024];
+	char curlinebuf[1024];
+	char tmpline[1024];
 	char region[8];
 
 	if(argc==1)
@@ -1072,6 +1077,7 @@ int main(int argc, char *argv[])
 		printf("--begintitle=<titleID> TitleID to begin download/decryption with, for the CSV.\n");
 		printf("--firstvercsv Only process the first title-version listed in the CSV, for each title.\n");
 		printf("--lastvercsv Only process the last title-version listed in the CSV, for each title.\n");
+		printf("--disabletitledups When processing the CSV, disable ignoring titles when the same titleID+titleversion were already handled(like with different SOAP regions).\n");
 		printf("--disablesettings Disable using the settings file. The settings-file is used for storing a cache of titlekeys/etc.\n");
 		printf("--settingspath=<path> Use the specified path for loading the settings file, instead of $HOME/.3ds/ctrclient-title_settings.\n");
 		return 0;
@@ -1169,6 +1175,7 @@ int main(int argc, char *argv[])
 
 		if(strncmp(argv[argi], "--firstvercsv", 13)==0)csv_versionhandling = 1;
 		if(strncmp(argv[argi], "--lastvercsv", 12)==0)csv_versionhandling = 2;
+		if(strncmp(argv[argi], "--disabletitledups", 18)==0)disabletitledups = 1;
 
 		if(strncmp(argv[argi], "--begintitle=", 13)==0)
 		{
@@ -1250,6 +1257,20 @@ int main(int argc, char *argv[])
 
 	while(fgets(linebuf, 1023, f))
 	{
+		if(!disabletitledups)
+		{
+			if(csvbuf_newsize)strncat(csvbuf, curlinebuf, csvbuf_newsize-1);
+			csvbufsize = csvbuf_newsize;
+
+			csvbuf_newsize = csvbufsize + strlen(linebuf);
+			if(csvbufsize==0)csvbuf_newsize++;
+			csvbuf = realloc(csvbuf, csvbuf_newsize);
+			memset(&csvbuf[csvbufsize], 0, csvbuf_newsize-csvbufsize);
+
+			memset(curlinebuf, 0, sizeof(curlinebuf));
+			strncpy(curlinebuf, linebuf, sizeof(curlinebuf)-1);
+		}
+
 		strptr = strchr(linebuf, '\n');
 		if(strptr)*strptr = 0;
 
@@ -1261,6 +1282,7 @@ int main(int argc, char *argv[])
 				printf("Skipping invalid line.\n");
 				continue;
 			}
+			tidstr = strptr;
 			sscanf(strptr, "%016"PRIx64, &titleid);
 
 			if((begintitleid && !found_start) && titleid==begintitleid)
@@ -1312,6 +1334,32 @@ int main(int argc, char *argv[])
 					continue;
 				}
 
+				if(!disabletitledups)
+				{
+					if((strptr2 = strstr(csvbuf, tidstr)))
+					{
+						printf("Found TID dup for titleID %s.\n", tidstr);
+
+						memset(tmpline, 0, sizeof(tmpline));
+						
+						pos = 0;
+						while(pos < (sizeof(tmpline)-1))
+						{
+							if(strptr2[pos]==0 || strptr2[pos]==0x0a)break;
+							tmpline[pos] = strptr2[pos];
+							pos++;
+						}
+						if(pos != (sizeof(tmpline)-1))tmpline[pos] = 0;
+
+						if(strstr(tmpline, strptr))
+						{
+							printf("Found titleID+titleversion duplicate: titleID %s version %s. Removing the just-created directory which won't be used: %s\n", tidstr, strptr, titlepathbase);
+							rmdir(titlepathbase);
+							break;
+						}
+					}
+				}
+
 				if(strptr[0] == 'v')strptr++;
 				sscanf(strptr, "%u", &titleversion);
 
@@ -1329,6 +1377,7 @@ int main(int argc, char *argv[])
 					if(ret!=0)
 					{
 						settings_shutdown();
+						if(!disabletitledups)free(csvbuf);
 						return ret;
 					}
 				}
@@ -1338,6 +1387,7 @@ int main(int argc, char *argv[])
 					if(ret!=0)
 					{
 						settings_shutdown();
+						if(!disabletitledups)free(csvbuf);
 						return ret;
 					}
 				}
@@ -1350,6 +1400,8 @@ int main(int argc, char *argv[])
 		linei++;
 		memset(linebuf, 0, 1024);
 	}
+
+	if(!disabletitledups)free(csvbuf);
 
 	if(csvpath[0])fclose(f);
 
