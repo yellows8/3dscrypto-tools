@@ -435,6 +435,29 @@ int settings_set_ticketkeyinfo(uint64_t titleid, unsigned char *keyindex, unsign
 	return 0;
 }
 
+int settings_get_titlemultiregion(uint64_t titleid, uint32_t *out)
+{
+	int ret;
+	char *strptr;
+	char line[256];
+
+	memset(line, 0, sizeof(line));
+
+	if((ret = settings_get_titleline(titleid, line, sizeof(line)-1, NULL))!=0)return ret;
+
+	strptr = strstr(line, "multiregion=0x");
+	if(strptr==NULL)
+	{
+		return 3;
+	}
+
+	*out = 0;
+
+	sscanf(&strptr[14], "%x", out);
+
+	return 0;
+}
+
 ctr_tmd_body *tmd_get_body(unsigned char *tmdbuf) 
 {
 	unsigned int type = getbe32(tmdbuf);
@@ -1039,7 +1062,8 @@ int main(int argc, char *argv[])
 	int titleid_set = 0, found_start = 0;
 	int pos;
 	unsigned int tmp=0;
-	int use_csv = 0, csv_versionhandling = 0, disabletitledups = 0;
+	uint32_t tmp32=0, createddir=0;
+	int use_csv = 0, csv_versionhandling = 0, disabletitledups = 0, disablemultiregion = 0;
 	int enable_settingsloading = 1;
 	uint64_t titleid = 0;
 	uint64_t begintitleid = 0;
@@ -1078,6 +1102,7 @@ int main(int argc, char *argv[])
 		printf("--firstvercsv Only process the first title-version listed in the CSV, for each title.\n");
 		printf("--lastvercsv Only process the last title-version listed in the CSV, for each title.\n");
 		printf("--disabletitledups When processing the CSV, disable ignoring titles when the same titleID+titleversion were already handled(like with different SOAP regions).\n");
+		printf("--disablemultiregion Disable handling the multiregion option which can be specified in the settings-file for each title-line('multiregion=0x<hexval>'). When handling for it is enabled(when settings are successfully loaded) and the settings field is set to 0x1, no region-specific directories under the titleID directory will be created/used during CSV processing.\n");
 		printf("--disablesettings Disable using the settings file. The settings-file is used for storing a cache of titlekeys/etc.\n");
 		printf("--settingspath=<path> Use the specified path for loading the settings file, instead of $HOME/.3ds/ctrclient-title_settings.\n");
 		return 0;
@@ -1176,6 +1201,7 @@ int main(int argc, char *argv[])
 		if(strncmp(argv[argi], "--firstvercsv", 13)==0)csv_versionhandling = 1;
 		if(strncmp(argv[argi], "--lastvercsv", 12)==0)csv_versionhandling = 2;
 		if(strncmp(argv[argi], "--disabletitledups", 18)==0)disabletitledups = 1;
+		if(strncmp(argv[argi], "--disablemultiregion", 20)==0)disablemultiregion = 1;
 
 		if(strncmp(argv[argi], "--begintitle=", 13)==0)
 		{
@@ -1321,9 +1347,23 @@ int main(int argc, char *argv[])
 			snprintf(titlepathbase, 255, "%s/%016"PRIx64, titlepath, titleid);
 			makedir(titlepathbase);
 
-			pos = strlen(titlepathbase);
-			snprintf(&titlepathbase[pos], 255 - pos, "/%s", region);
-			makedir(titlepathbase);
+			createddir = 0;
+
+			tmp32 = 0;
+			ret = 0;
+			if(!disablemultiregion)ret = settings_get_titlemultiregion(titleid, &tmp32);
+
+			if(ret==0 && tmp32==1)
+			{
+				printf("TitleID %s is listed as multiregion in the settings-file, no region-specific directory will be used for it.\n", tidstr);
+			}
+			else
+			{
+				createddir = 1;
+				pos = strlen(titlepathbase);
+				snprintf(&titlepathbase[pos], 255 - pos, "/%s", region);
+				makedir(titlepathbase);
+			}
 
 			while(strptr)
 			{
@@ -1353,8 +1393,13 @@ int main(int argc, char *argv[])
 
 						if(strstr(tmpline, strptr))
 						{
-							printf("Found titleID+titleversion duplicate: titleID %s version %s. Removing the just-created directory which won't be used: %s\n", tidstr, strptr, titlepathbase);
-							rmdir(titlepathbase);
+							printf("Found titleID+titleversion duplicate: titleID %s version %s. Ignoring this entry.\n", tidstr, strptr);
+							if(createddir)
+							{
+								printf("Removing the just-created directory which won't be used: %s", titlepathbase);
+								rmdir(titlepathbase);
+							}
+							printf("\n");
 							break;
 						}
 					}
