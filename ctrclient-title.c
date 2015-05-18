@@ -1038,12 +1038,12 @@ int main(int argc, char *argv[])
 	int titleid_set = 0, found_start = 0;
 	int pos;
 	unsigned int tmp=0;
-	int use_csv = 0;
+	int use_csv = 0, csv_versionhandling = 0;
 	int enable_settingsloading = 1;
 	uint64_t titleid = 0;
 	uint64_t begintitleid = 0;
 	FILE *f;
-	char *strptr;
+	char *strptr, *nextstrptr;
 	unsigned char titlekey[16];
 	char titlepath[256];
 	char titlepathtmp[256];
@@ -1070,6 +1070,8 @@ int main(int argc, char *argv[])
 		printf("--disablencch Don't run ctrclient-ncch when --decrypt was used.\n");
 		printf("--csv=<csv_filepath> Parse the input CSV, for the operation(s) specified via the other parameters. When just --csv is used, the CSV is read from stdin. For example, to dl+decrypt titles for a sysupdate via the yls8.mtheall.com site: curl \"<URL for CSV>\" | ctrclient-title ... --dltitle --decrypt --titlepath=<sysupdate outdir> --csv\n");
 		printf("--begintitle=<titleID> TitleID to begin download/decryption with, for the CSV.\n");
+		printf("--firstvercsv Only process the first title-version listed in the CSV, for each title.\n");
+		printf("--lastvercsv Only process the last title-version listed in the CSV, for each title.\n");
 		printf("--disablesettings Disable using the settings file. The settings-file is used for storing a cache of titlekeys/etc.\n");
 		printf("--settingspath=<path> Use the specified path for loading the settings file, instead of $HOME/.3ds/ctrclient-title_settings.\n");
 		return 0;
@@ -1164,6 +1166,9 @@ int main(int argc, char *argv[])
 			use_csv = 1;
 			if(argv[argi][5] == '=')strncpy(csvpath, &argv[argi][6], 255);
 		}
+
+		if(strncmp(argv[argi], "--firstvercsv", 13)==0)csv_versionhandling = 1;
+		if(strncmp(argv[argi], "--lastvercsv", 12)==0)csv_versionhandling = 2;
 
 		if(strncmp(argv[argi], "--begintitle=", 13)==0)
 		{
@@ -1300,6 +1305,13 @@ int main(int argc, char *argv[])
 
 			while(strptr)
 			{
+				nextstrptr = strtok(NULL, " ");
+				if(csv_versionhandling==2 && nextstrptr!=NULL)
+				{
+					strptr = nextstrptr;
+					continue;
+				}
+
 				if(strptr[0] == 'v')strptr++;
 				sscanf(strptr, "%u", &titleversion);
 
@@ -1330,7 +1342,8 @@ int main(int argc, char *argv[])
 					}
 				}
 
-				strptr = strtok(NULL, " ");
+				strptr = nextstrptr;
+				if(csv_versionhandling==1)break;
 			}
 		}
 
