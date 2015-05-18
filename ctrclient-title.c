@@ -458,6 +458,37 @@ int settings_get_titlemultiregion(uint64_t titleid, uint32_t *out)
 	return 0;
 }
 
+int settings_get_titledirpath(uint64_t titleid, char *dirpath, size_t dirpath_maxsize)
+{
+	int ret;
+	size_t pos;
+	char *strptr;
+	char line[256];
+
+	memset(line, 0, sizeof(line));
+
+	if((ret = settings_get_titleline(titleid, line, sizeof(line)-1, NULL))!=0)return ret;
+
+	strptr = strstr(line, "\"dirpath=");
+	if(strptr==NULL)
+	{
+		return 3;
+	}
+
+	strptr = &strptr[9];
+
+	pos = 0;
+	while(pos < dirpath_maxsize)
+	{
+		if(strptr[pos]==0 || strptr[pos]=='"')break;
+		dirpath[pos] = strptr[pos];
+		pos++;
+	}
+	if(pos != dirpath_maxsize)dirpath[pos] = 0;
+
+	return 0;
+}
+
 ctr_tmd_body *tmd_get_body(unsigned char *tmdbuf) 
 {
 	unsigned int type = getbe32(tmdbuf);
@@ -1063,7 +1094,7 @@ int main(int argc, char *argv[])
 	int pos;
 	unsigned int tmp=0;
 	uint32_t tmp32=0, createddir=0;
-	int use_csv = 0, csv_versionhandling = 0, disabletitledups = 0, disablemultiregion = 0;
+	int use_csv = 0, csv_versionhandling = 0, disabletitledups = 0, disablemultiregion = 0, disablecsvtitledir = 0;
 	int enable_settingsloading = 1;
 	uint64_t titleid = 0;
 	uint64_t begintitleid = 0;
@@ -1103,6 +1134,7 @@ int main(int argc, char *argv[])
 		printf("--lastvercsv Only process the last title-version listed in the CSV, for each title.\n");
 		printf("--disabletitledups When processing the CSV, disable ignoring titles when the same titleID+titleversion were already handled(like with different SOAP regions).\n");
 		printf("--disablemultiregion Disable handling the multiregion option which can be specified in the settings-file for each title-line('multiregion=0x<hexval>'). When handling for it is enabled(when settings are successfully loaded) and the settings field is set to 0x1, no region-specific directories under the titleID directory will be created/used during CSV processing.\n");
+		printf("--disablecsvtitledir When processing the CSV, disable using the titledir field from the settings for the base dirname, instead of the titleID. That field has the following structure: \"titledir=<dirname>\".\n");
 		printf("--disablesettings Disable using the settings file. The settings-file is used for storing a cache of titlekeys/etc.\n");
 		printf("--settingspath=<path> Use the specified path for loading the settings file, instead of $HOME/.3ds/ctrclient-title_settings.\n");
 		return 0;
@@ -1202,6 +1234,7 @@ int main(int argc, char *argv[])
 		if(strncmp(argv[argi], "--lastvercsv", 12)==0)csv_versionhandling = 2;
 		if(strncmp(argv[argi], "--disabletitledups", 18)==0)disabletitledups = 1;
 		if(strncmp(argv[argi], "--disablemultiregion", 20)==0)disablemultiregion = 1;
+		if(strncmp(argv[argi], "--disablecsvtitledir", 20)==0)disablecsvtitledir = 1;
 
 		if(strncmp(argv[argi], "--begintitle=", 13)==0)
 		{
@@ -1343,8 +1376,22 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
-			memset(titlepathbase, 0, 256);
-			snprintf(titlepathbase, 255, "%s/%016"PRIx64, titlepath, titleid);
+			memset(titlepathbase, 0, sizeof(titlepathbase));
+			strncpy(titlepathbase, titlepath, sizeof(titlepathbase)-1);
+
+			pos = strlen(titlepathbase);
+			titlepathbase[pos] = '/';
+			pos++;
+
+			if(!disablecsvtitledir && settings_get_titledirpath(titleid, &titlepathbase[pos], (sizeof(titlepathbase)-1) - pos)==0)
+			{
+				printf("Using dirpath from settings.\n");
+			}
+			else
+			{
+				snprintf(&titlepathbase[pos], (sizeof(titlepathbase)-1) - pos, "%016"PRIx64, titleid);
+			}
+
 			makedir(titlepathbase);
 
 			createddir = 0;
