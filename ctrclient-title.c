@@ -484,7 +484,10 @@ int settings_get_titledirpath(uint64_t titleid, char *dirpath, size_t dirpath_ma
 		dirpath[pos] = strptr[pos];
 		pos++;
 	}
+
 	if(pos != dirpath_maxsize)dirpath[pos] = 0;
+
+	if(pos>0 && (dirpath[pos-1]=='/' || dirpath[pos-1]=='\\'))dirpath[pos-1] = 0;
 
 	return 0;
 }
