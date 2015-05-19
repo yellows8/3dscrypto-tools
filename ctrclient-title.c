@@ -103,6 +103,48 @@ int http_request(char *url, FILE *outfile)
   return (int)ret;
 }
 
+int makedir_recursive(char *path)
+{
+	int ret;
+	uint32_t pos, pathlen;
+	struct stat dirstat;
+	char inpathtmp[1024];
+	char pathtmp[1024];
+
+	pos = strlen(path);
+	if(pos==0)return -2;
+
+	memset(inpathtmp, 0, sizeof(inpathtmp));
+	memset(pathtmp, 0, sizeof(pathtmp));
+
+	strncpy(inpathtmp, path, sizeof(inpathtmp)-1);
+
+	if(inpathtmp[pos-1]=='/' || inpathtmp[pos-1]=='\\')inpathtmp[pos-1] = 0;
+
+	pathlen = strlen(inpathtmp);
+	pos = 0;
+
+	while(pos < pathlen+1)
+	{
+		if(inpathtmp[pos]=='/' || inpathtmp[pos]=='\\' || inpathtmp[pos]==0)
+		{
+			memset(&dirstat, 0, sizeof(struct stat));
+			if(stat(pathtmp, &dirstat)==-1)
+			{
+				ret = makedir(pathtmp);
+				if(ret==-1)return ret;
+			}
+
+			
+		}
+
+		pathtmp[pos] = inpathtmp[pos];
+		pos++;
+	}
+
+	return 0;
+}
+
 int pack_cia(uint64_t titleid, char *titlepath)
 {
 	int ret;
@@ -1137,7 +1179,7 @@ int main(int argc, char *argv[])
 		printf("--lastvercsv Only process the last title-version listed in the CSV, for each title.\n");
 		printf("--disabletitledups When processing the CSV, disable ignoring titles when the same titleID+titleversion were already handled(like with different SOAP regions).\n");
 		printf("--disablemultiregion Disable handling the multiregion option which can be specified in the settings-file for each title-line('multiregion=0x<hexval>'). When handling for it is enabled(when settings are successfully loaded) and the settings field is set to 0x1, no region-specific directories under the titleID directory will be created/used during CSV processing.\n");
-		printf("--disablecsvtitledir When processing the CSV, disable using the titledir field from the settings for the base dirname, instead of the titleID. That field has the following structure: \"titledir=<dirname>\".\n");
+		printf("--disablecsvtitledir When processing the CSV, disable using the titledir field from the settings for the base dirname, instead of the titleID. That field has the following structure: \"titledir=<dirpath>\".\n");
 		printf("--disablesettings Disable using the settings file. The settings-file is used for storing a cache of titlekeys/etc.\n");
 		printf("--settingspath=<path> Use the specified path for loading the settings file, instead of $HOME/.3ds/ctrclient-title_settings.\n");
 		return 0;
@@ -1395,7 +1437,7 @@ int main(int argc, char *argv[])
 				snprintf(&titlepathbase[pos], (sizeof(titlepathbase)-1) - pos, "%016"PRIx64, titleid);
 			}
 
-			makedir(titlepathbase);
+			makedir_recursive(titlepathbase);
 
 			createddir = 0;
 
