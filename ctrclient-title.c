@@ -126,16 +126,21 @@ int makedir_recursive(char *path)
 
 	while(pos < pathlen+1)
 	{
-		if(inpathtmp[pos]=='/' || inpathtmp[pos]=='\\' || inpathtmp[pos]==0)
+		if(pos>0)
 		{
-			memset(&dirstat, 0, sizeof(struct stat));
-			if(stat(pathtmp, &dirstat)==-1)
+			if(inpathtmp[pos]=='/' || inpathtmp[pos]=='\\' || inpathtmp[pos]==0)
 			{
-				ret = makedir(pathtmp);
-				if(ret==-1)return ret;
+				memset(&dirstat, 0, sizeof(struct stat));
+				if(stat(pathtmp, &dirstat)==-1)
+				{
+					ret = makedir(pathtmp);
+					if(ret==-1)
+					{
+						printf("makedir failed with: %s\n", pathtmp);
+						return ret;
+					}
+				}	
 			}
-
-			
 		}
 
 		pathtmp[pos] = inpathtmp[pos];
@@ -1437,7 +1442,8 @@ int main(int argc, char *argv[])
 				snprintf(&titlepathbase[pos], (sizeof(titlepathbase)-1) - pos, "%016"PRIx64, titleid);
 			}
 
-			makedir_recursive(titlepathbase);
+			printf("Creating directory path, if needed: %s\n", titlepathbase);
+			if(makedir_recursive(titlepathbase)==-1)printf("makedir_recursive failed.\n");
 
 			createddir = 0;
 
