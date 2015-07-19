@@ -382,16 +382,25 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if(infn[0]==0 || outfn[0]==0 || serveradr[0]==0)return 1;
+	if(infn[0]==0 || outfn[0]==0 || serveradr[0]==0)
+	{
+		printf("Input, outpath, or serveradr params were not set.\n");
+		return 1;
+	}
 
 	buffer = (unsigned char*)malloc(CHUNKMAXSIZE);
-	if(buffer==NULL)return 1;
+	if(buffer==NULL)
+	{
+		printf("Failed to alloc memory.\n");
+		return 1;
+	}
 	memset(buffer, 0, CHUNKMAXSIZE);
 
 	finput = fopen(infn, "rb");
 	foutput = fopen(outfn, "wb");
 	if(finput==NULL || foutput==NULL)
 	{
+		printf("Failed to open the input and/or output files.\n");
 		free(buffer);
 		if(finput)fclose(finput);
 		if(foutput)fclose(foutput);

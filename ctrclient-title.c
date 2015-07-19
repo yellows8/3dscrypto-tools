@@ -629,22 +629,23 @@ int decrypt_ncch(u32 contentid, char *titlepath)
 {
 	int ret;
 	char sys_cmd[1024];
-	char basepath[64];
+	char basepath[1024];
 	char noromfs_cmd[16];
 	char serveradr_cmd[64];
 	char disasm_cmd[64];
 
-	memset(sys_cmd, 0, 1023);
-	memset(basepath, 0, 64);
-	memset(noromfs_cmd, 0, 16);
-	memset(serveradr_cmd, 0, 64);
-	memset(disasm_cmd, 0, 64);
-	snprintf(basepath, 63, "%s/%08x", titlepath, contentid);
-	if(noromfs)strncpy(noromfs_cmd, "--noromfs", 15);
-	if(serveradr_set)snprintf(serveradr_cmd, 63, "--serveradr=%s", serveradr);
-	if(disasm_title)snprintf(disasm_cmd, 63, "--disasm");
+	memset(sys_cmd, 0, sizeof(sys_cmd));
+	memset(basepath, 0, sizeof(basepath));
+	memset(noromfs_cmd, 0, sizeof(noromfs_cmd));
+	memset(serveradr_cmd, 0, sizeof(serveradr_cmd));
+	memset(disasm_cmd, 0, sizeof(disasm_cmd));
+	snprintf(basepath, sizeof(basepath)-1, "%s/%08x", titlepath, contentid);
+	if(noromfs)strncpy(noromfs_cmd, "--noromfs", sizeof(noromfs_cmd)-1);
+	if(serveradr_set)snprintf(serveradr_cmd, sizeof(serveradr_cmd)-1, "--serveradr=%s", serveradr);
+	if(disasm_title)snprintf(disasm_cmd, sizeof(disasm_cmd)-1, "--disasm");
 
-	snprintf(sys_cmd, 1023, "ctrclient-ncch --input=%s.app --output=%s.bin --ctrtoolprefix=%s %s %s %s", basepath, basepath, basepath, noromfs_cmd, serveradr_cmd, disasm_cmd);
+	snprintf(sys_cmd, sizeof(sys_cmd)-1, "ctrclient-ncch --input=%s.app --output=%s.bin --ctrtoolprefix=%s %s %s %s", basepath, basepath, basepath, noromfs_cmd, serveradr_cmd, disasm_cmd);
+	printf("Running command: %s\n", sys_cmd);
 	ret = system(sys_cmd);
 	return ret;
 }
