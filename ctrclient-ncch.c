@@ -208,35 +208,35 @@ int run_ctrtool(char *ncchfn, char *prefix)
 	u32 tmp;
 	char *home;
 	char keypath[256];
-	char romfs_cmd[256];
+	char romfs_cmd[1024];
 	char sys_cmd[1024];
 	unsigned char tmpbuf[0x400];
 
-	memset(keypath, 0, 256);
-	memset(romfs_cmd, 0, 256);
-	memset(sys_cmd, 0, 1024);
+	memset(keypath, 0, sizeof(keypath));
+	memset(romfs_cmd, 0, sizeof(romfs_cmd));
+	memset(sys_cmd, 0, sizeof(sys_cmd));
 	home = getenv("HOME");
 
 	if(home)
 	{
-		snprintf(keypath, 255, "%s/.3ds/keys.xml", home);
+		snprintf(keypath, sizeof(keypath)-1, "%s/.3ds/keys.xml", home);
 	}
 	else
 	{
-		strncpy(keypath, "keys.xml", 255);
+		strncpy(keypath, "keys.xml", sizeof(keypath)-1);
 	}
 
 	printf("Running ctrtool with prefix %s and ncch %s...\n", prefix, ncchfn);
 
-	if(!noromfs)snprintf(romfs_cmd, 255, "--romfs=%s.romfs", prefix);
-	snprintf(sys_cmd, 1023, "ctrtool -v --verify -p --keyset=%s --exefsdir=%s_exefs %s %s > %s.info", keypath, prefix, romfs_cmd, ncchfn, prefix);
+	if(!noromfs)snprintf(romfs_cmd, sizeof(romfs_cmd)-1, "--romfs=%s.romfs", prefix);
+	snprintf(sys_cmd, sizeof(sys_cmd)-1, "ctrtool -v --verify -p --keyset=%s --exefsdir=%s_exefs %s %s > %s.info", keypath, prefix, romfs_cmd, ncchfn, prefix);
 	ret = system(sys_cmd);
 	if(ret!=0)return ret;
 
 	if(noromfs)return 0;
 
-	memset(sys_cmd, 0, 1024);
-	snprintf(sys_cmd, 1023, "ctrtool -v --verify -p --keyset=%s --romfsdir=%s_romfs %s.romfs > %s.romfs_info", keypath, prefix, prefix, prefix);
+	memset(sys_cmd, 0, sizeof(sys_cmd));
+	snprintf(sys_cmd, sizeof(sys_cmd)-1, "ctrtool -v --verify -p --keyset=%s --romfsdir=%s_romfs %s.romfs > %s.romfs_info", keypath, prefix, prefix, prefix);
 	ret = system(sys_cmd);
 	if(ret==-1)return ret;
 	//if(ret!=0)return ret;
@@ -298,13 +298,13 @@ int run_ctrtool(char *ncchfn, char *prefix)
 
 		fclose(f);
 
-		memset(sys_cmd, 0, 1024);
-		snprintf(sys_cmd, 255, "arm-none-eabi-objdump -D -b binary -m arm --adjust-vma=0x%0x %s_exefs/code.bin > %s_ARM.s", tmp, prefix, prefix);
+		memset(sys_cmd, 0, sizeof(sys_cmd));
+		snprintf(sys_cmd, sizeof(sys_cmd)-1, "arm-none-eabi-objdump -D -b binary -m arm --adjust-vma=0x%0x %s_exefs/code.bin > %s_ARM.s", tmp, prefix, prefix);
 		ret = system(sys_cmd);
 		if(ret!=0)return ret;
 
-		memset(sys_cmd, 0, 1024);
-		snprintf(sys_cmd, 255, "arm-none-eabi-objdump -D -b binary -m arm -M force-thumb --adjust-vma=0x%0x %s_exefs/code.bin > %s_THUMB.s", tmp, prefix, prefix);
+		memset(sys_cmd, 0, sizeof(sys_cmd));
+		snprintf(sys_cmd, sizeof(sys_cmd)-1, "arm-none-eabi-objdump -D -b binary -m arm -M force-thumb --adjust-vma=0x%0x %s_exefs/code.bin > %s_THUMB.s", tmp, prefix, prefix);
 		ret = system(sys_cmd);
 		if(ret!=0)return ret;
 	}
@@ -326,9 +326,9 @@ int main(int argc, char *argv[])
 	unsigned char hashdata[0x20];
 	unsigned char contentlockseed[0x10];
 
-	char infn[256];
-	char outfn[256];
-	char ctrtool_prefix[256];
+	char infn[1024];
+	char outfn[1024];
+	char ctrtool_prefix[1024];
 	char serveradr[256];
 
 	if(argc==1)
@@ -346,19 +346,19 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	memset(serveradr, 0, 256);
+	memset(serveradr, 0, sizeof(serveradr));
 
-	memset(infn, 0, 256);
-	memset(outfn, 0, 256);
-	memset(ctrtool_prefix, 0, 256);
+	memset(infn, 0, sizeof(infn));
+	memset(outfn, 0, sizeof(outfn));
+	memset(ctrtool_prefix, 0, sizeof(ctrtool_prefix));
 	memset(contentlockseed, 0, 0x10);
 
 	for(argi=1; argi<argc; argi++)
 	{
-		if(strncmp(argv[argi], "--serveradr=", 12)==0)strncpy(serveradr, &argv[argi][12], 255);
-		if(strncmp(argv[argi], "--input=", 8)==0)strncpy(infn, &argv[argi][8], 255);
-		if(strncmp(argv[argi], "--output=", 9)==0)strncpy(outfn, &argv[argi][9], 255);
-		if(strncmp(argv[argi], "--ctrtoolprefix=", 16)==0)strncpy(ctrtool_prefix, &argv[argi][16], 255);
+		if(strncmp(argv[argi], "--serveradr=", 12)==0)strncpy(serveradr, &argv[argi][12], sizeof(serveradr)-1);
+		if(strncmp(argv[argi], "--input=", 8)==0)strncpy(infn, &argv[argi][8], sizeof(infn)-1);
+		if(strncmp(argv[argi], "--output=", 9)==0)strncpy(outfn, &argv[argi][9], sizeof(outfn)-1);
+		if(strncmp(argv[argi], "--ctrtoolprefix=", 16)==0)strncpy(ctrtool_prefix, &argv[argi][16], sizeof(ctrtool_prefix)-1);
 		if(strncmp(argv[argi], "--noromfs", 9)==0)noromfs = 1;
 		if(strncmp(argv[argi], "--disasm", 8)==0)enable_disasm = 1;
 		if(strncmp(argv[argi], "--ncchoff=", 10)==0)sscanf(&argv[argi][10], "%x", &ncchoff);
