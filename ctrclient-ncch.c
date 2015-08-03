@@ -18,6 +18,9 @@ unsigned char *buffer;
 int use_newncchcrypto = 0, keyY_method = 0;
 unsigned int newncchcrypto_keyslot = 0;
 
+unsigned char original_keyY[0x10];
+unsigned char otherncchsections_keyY[0x10];
+
 int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int cryptotype)
 {
 	unsigned int sz;
@@ -40,17 +43,37 @@ int write_ncch(u32 section_offset, u32 offset, u32 size, ctr_ncchtypes type, int
 		counter[14] = (section_offset >> 8) & 0xff;
 		counter[15] = section_offset & 0xff;
 
-		if (!ctrclient_aes_set_ctr(&client, counter))return 1;
+		if(!ctrclient_aes_set_ctr(&client, counter))return 1;
 
-		if(cryptotype==1)
+		if(use_newncchcrypto)
 		{
-			printf("Using regular NCCH crypto keyslot.\n");
-			if(!ctrclient_aes_select_key(&client, 0x2c))return 1;
+			if(cryptotype==1)
+			{
+				printf("Using regular NCCH crypto keyslot.\n");
+				if(!ctrclient_aes_select_key(&client, 0x2c))return 1;
+			}
+			else
+			{
+				printf("Using new NCCH crypto keyslot.\n");
+				if(!ctrclient_aes_select_key(&client, newncchcrypto_keyslot))return 1;
+			}
 		}
 		else
 		{
-			printf("Using new NCCH crypto keyslot.\n");
-			if(!ctrclient_aes_select_key(&client, newncchcrypto_keyslot))return 1;
+			if(keyY_method)
+			{
+				if(cryptotype==1)
+				{
+					if(!ctrclient_aes_set_ykey(&client, 0x2c, original_keyY))return 1;
+				}
+				else
+				{
+					if(!ctrclient_aes_set_ykey(&client, 0x2c, otherncchsections_keyY))return 1;
+				}
+			}
+
+			printf("Using regular NCCH crypto keyslot.\n");
+			if(!ctrclient_aes_select_key(&client, 0x2c))return 1;
 		}
 	}
 
@@ -142,12 +165,8 @@ int decrypt_exefs()
 		memcpy(tmpstr, (char*)&exefshdr[pos], 8);
 		snprintf(str, 31, "ExeFS:/%s", tmpstr);
 
-		type = 1;
-		if(use_newncchcrypto)
-		{
-			type = 2;
-			if(strncmp(tmpstr, "icon", 4)==0 || strncmp(tmpstr, "banner", 6)==0)type = 1;
-		}
+		type = 2;
+		if(strncmp(tmpstr, "icon", 4)==0 || strncmp(tmpstr, "banner", 6)==0)type = 1;
 
 		size = getle32(&exefshdr[pos+12]);
 
@@ -194,7 +213,7 @@ int decrypt_ncch()
 	
 	if(!noromfs)
 	{
-		ret = write_section("RomFS", 0, getle32(ncch_hdr.romfsoffset), getle32(ncch_hdr.romfssize)*mediaunitsize, NCCHTYPE_ROMFS, 1 + use_newncchcrypto);
+		ret = write_section("RomFS", 0, getle32(ncch_hdr.romfsoffset), getle32(ncch_hdr.romfssize)*mediaunitsize, NCCHTYPE_ROMFS, 2);
 		if(ret)return ret;
 	}
 
@@ -321,7 +340,6 @@ int main(int argc, char *argv[])
 	int contentlockseed_set = 0;
 	unsigned int tmp=0;
 
-	unsigned char newkeyslot_keyY[0x10];
 	unsigned char calchash[0x20];
 	unsigned char hashdata[0x20];
 	unsigned char contentlockseed[0x10];
@@ -471,7 +489,7 @@ int main(int argc, char *argv[])
 	if(ncch_hdr.flags[7] & 0x20)
 	{
 		keyY_method = 1;
-		printf("This NCCH uses the v9.6 NCCH keyY generation method for the non-0x2c-keyslots.\n");
+		printf("This NCCH uses the v9.6 NCCH seed keyY generation method.\n");
 	}
 
 	mediaunitsize = 1 << (ncch_hdr.flags[6] + 9);
@@ -487,7 +505,7 @@ int main(int argc, char *argv[])
 
 	if(!keyY_method)
 	{
-		memcpy(newkeyslot_keyY, ncch_hdr.signature, 0x10);
+		memcpy(otherncchsections_keyY, ncch_hdr.signature, 0x10);
 	}
 	else
 	{
@@ -501,20 +519,25 @@ int main(int argc, char *argv[])
 		memcpy(hashdata, ncch_hdr.signature, 0x10);
 		memcpy(&hashdata[0x10], contentlockseed, 0x10);
 		SHA256(hashdata, 0x20, calchash);
-		memcpy(newkeyslot_keyY, calchash, 0x10);
+		memcpy(otherncchsections_keyY, calchash, 0x10);
 	}
 
-	if(!ctrclient_aes_set_ykey(&client, 0x2c, ncch_hdr.signature))
+	memcpy(original_keyY, ncch_hdr.signature, 0x10);
+
+	if(use_newncchcrypto || (!use_newncchcrypto && !keyY_method))
 	{
-		free(buffer);
-		fclose(finput);
-		fclose(foutput);
-		return 1;
+		if(!ctrclient_aes_set_ykey(&client, 0x2c, original_keyY))
+		{
+			free(buffer);
+			fclose(finput);
+			fclose(foutput);
+			return 1;
+		}
 	}
 
 	if(use_newncchcrypto)
 	{
-		if(!ctrclient_aes_set_ykey(&client, newncchcrypto_keyslot, newkeyslot_keyY))
+		if(!ctrclient_aes_set_ykey(&client, newncchcrypto_keyslot, otherncchsections_keyY))
 		{
 			free(buffer);
 			fclose(finput);
