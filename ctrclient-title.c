@@ -50,6 +50,7 @@ int tikdecrypt_titlekey(char *path, unsigned char *titlekey);
  ************************************************************************/
 int http_request(char *url, FILE *outfile)
 {
+  long http_statuscode=0;
   CURLcode ret;
   CURL *hnd = curl_easy_init();
 
@@ -58,7 +59,7 @@ int http_request(char *url, FILE *outfile)
   curl_easy_setopt(hnd, CURLOPT_FILE, outfile);
   curl_easy_setopt(hnd, CURLOPT_NOPROGRESS, 0);
   curl_easy_setopt(hnd, CURLOPT_HEADER, 0);
-  curl_easy_setopt(hnd, CURLOPT_FAILONERROR, 0);
+  curl_easy_setopt(hnd, CURLOPT_FAILONERROR, 1);
   curl_easy_setopt(hnd, CURLOPT_DIRLISTONLY, 0);
   curl_easy_setopt(hnd, CURLOPT_APPEND, 0);
   curl_easy_setopt(hnd, CURLOPT_FOLLOWLOCATION, 0);
@@ -99,6 +100,14 @@ int http_request(char *url, FILE *outfile)
   curl_easy_setopt(hnd, CURLOPT_ENCODING, NULL);
   curl_easy_setopt(hnd, CURLOPT_POSTREDIR, 0);
   ret = curl_easy_perform(hnd);
+
+  if(ret==CURLE_HTTP_RETURNED_ERROR)
+  {
+       curl_easy_getinfo(hnd, CURLINFO_RESPONSE_CODE, &http_statuscode);
+       curl_easy_cleanup(hnd);
+       return (int)http_statuscode;
+  }
+
   curl_easy_cleanup(hnd);
   return (int)ret;
 }
@@ -617,7 +626,7 @@ int download_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *c
 		ret = cdn_download(titleid, titlepath, dlname, path);
 		if(ret!=0)
 		{
-			printf("Failed to download contentID %08x: %d", contentid, ret);
+			printf("Failed to download contentID %08x: %d\n", contentid, ret);
 			return ret;
 		}
 	}
@@ -1153,6 +1162,10 @@ int main(int argc, char *argv[])
 	char *strptr, *nextstrptr, *strptr2, *tidstr;
 	char *csvbuf = NULL;
 	size_t csvbufsize = 0, csvbuf_newsize = 0;
+
+	int enable_csvtitle_retry = 0;
+	int csvignore404 = 0;
+
 	unsigned char titlekey[16];
 	char titlepath[256];
 	char titlepathtmp[256];
@@ -1186,6 +1199,8 @@ int main(int argc, char *argv[])
 		printf("--disabletitledups When processing the CSV, disable ignoring titles when the same titleID+titleversion were already handled(like with different SOAP regions).\n");
 		printf("--disablemultiregion Disable handling the multiregion option which can be specified in the settings-file for each title-line('multiregion=0x<hexval>'). When handling for it is enabled(when settings are successfully loaded) and the settings field is set to 0x1, no region-specific directories under the titleID directory will be created/used during CSV processing.\n");
 		printf("--disablecsvtitledir When processing the CSV, disable using the titledir field from the settings for the base dirname, instead of the titleID. That field has the following structure: \"titledir=<dirpath>\".\n");
+		printf("--enablecsvtitleretry When title processing fails while handling a CSV, keep retrying title processing until it's successful. This only applies when a HTTP 404 didn't occur.\n");
+		printf("--csvignore404 When a HTTP 404 occurs during CSV processing, title processing will continue to the next title in the CSV instead of immediately halting.\n");
 		printf("--disablesettings Disable using the settings file. The settings-file is used for storing a cache of titlekeys/etc.\n");
 		printf("--settingspath=<path> Use the specified path for loading the settings file, instead of $HOME/.3ds/ctrclient-title_settings.\n");
 		return 0;
@@ -1286,6 +1301,8 @@ int main(int argc, char *argv[])
 		if(strncmp(argv[argi], "--disabletitledups", 18)==0)disabletitledups = 1;
 		if(strncmp(argv[argi], "--disablemultiregion", 20)==0)disablemultiregion = 1;
 		if(strncmp(argv[argi], "--disablecsvtitledir", 20)==0)disablecsvtitledir = 1;
+		if(strncmp(argv[argi], "--enablecsvtitleretry", 21)==0)enable_csvtitle_retry = 1;
+		if(strncmp(argv[argi], "--csvignore404", 14)==0)csvignore404 = 1;
 
 		if(strncmp(argv[argi], "--begintitle=", 13)==0)
 		{
@@ -1515,25 +1532,35 @@ int main(int argc, char *argv[])
 
 				printf("titleID: %016"PRIx64" region: %s titlever: %u. path: %s\n", titleid, region, titleversion, titlepathtmp);
 
-				if(dltitle)
+				while(1)
 				{
-					ret = download_title(titleid, titlepathtmp);
-					if(ret!=0)
+					ret = 0;
+
+					if(dltitle)
+					{
+						ret = download_title(titleid, titlepathtmp);
+					}
+					else if(dectitle)
+					{
+						ret = parse_tmd(titleid, titlepathtmp);
+					}
+
+					if(csvignore404 && ret==404)
+					{
+						printf("HTTP 404 occured, continuing to the next title for processing since downloading the current one failed...\n");
+						break;
+					}
+
+					if(ret!=0 && (enable_csvtitle_retry==0 || ret==404))
 					{
 						settings_shutdown();
 						if(!disabletitledups)free(csvbuf);
 						return ret;
 					}
-				}
-				else if(dectitle)
-				{
-					ret = parse_tmd(titleid, titlepathtmp);
-					if(ret!=0)
-					{
-						settings_shutdown();
-						if(!disabletitledups)free(csvbuf);
-						return ret;
-					}
+
+					if(ret==0)break;
+
+					printf("Retrying title processing...\n");
 				}
 
 				strptr = nextstrptr;
