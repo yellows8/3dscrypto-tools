@@ -1358,6 +1358,10 @@ int main(int argc, char *argv[])
 			settings_shutdown();
 			return ret;
 		}
+
+		printf("--dltitle and/or --decrypt must be specified.\n");
+
+		return 0;
 	}
 
 	if(csvpath[0])
