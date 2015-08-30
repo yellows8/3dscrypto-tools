@@ -3,10 +3,10 @@ $(error "The CTRCLIENT Makefile param is required, this should be: <localdir for
 endif
 
 LIBS = -lcrypto
-OBJS = ctrclient-ncch.o $(CTRCLIENT)/ctrclient.o utils.o
+OBJS = ctr-ncchtool.o $(CTRCLIENT)/ctrclient.o utils.o
 CXXFLAGS = -Wall -Os -I. -I$(CTRCLIENT)
 CFLAGS = $(CXXFLAGS)
-OUTPUT = ctrclient-ncch
+OUTPUT = ctr-ncchtool
 CC = gcc
 
 ifneq ($(strip $(NIX)),)

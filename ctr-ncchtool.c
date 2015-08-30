@@ -9,7 +9,7 @@
 #include "ncch.h"
 
 unsigned int ncchoff = 0;
-int noromfs = 0, enable_disasm = 0;
+static int noromfs = 0, enable_disasm = 0;
 ctrclient client;
 FILE *finput, *foutput;
 ctr_ncchheader ncch_hdr;
@@ -331,7 +331,11 @@ int run_ctrtool(char *ncchfn, char *prefix)
 	return 0;
 }
 
+#ifndef EMBED_NCCHTOOL
 int main(int argc, char *argv[])
+#else
+int main_ncchtool(int argc, char *argv[])
+#endif
 {
 	int i;
 	int ret;
@@ -351,7 +355,7 @@ int main(int argc, char *argv[])
 
 	if(argc==1)
 	{
-		printf("ctrclient-ncch by yellows8\n");
+		printf("%s by yellows8\n", argv[0]);
 		printf("Decrypt/encrypt a retail secure-key NCCH, options:\n");
 		printf("--serveradr=<addr> Use the specified server address instead of the default address.\n");
 		printf("--input=<path> Input path for secure key NCCH\n");

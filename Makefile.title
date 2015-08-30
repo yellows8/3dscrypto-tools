@@ -2,11 +2,23 @@ ifeq ($(strip $(CTRCLIENT)),)
 $(error "The CTRCLIENT Makefile param is required, this should be: <localdir for neimod/ctr repo>/ctr/ramtracer/ctrclient")
 endif
 
+EXTRA_OBJ	:=	
+DEFINES	:=	
+
+ifneq ($(strip $(EMBED_NCCHTOOL)),)
+	EXTRA_OBJ	:=	ctr-ncchtool.o
+	DEFINES	:=	-DEMBED_NCCHTOOL
+endif
+
+ifneq ($(strip $(DEFAULT_ADDITIONAL_ARGS)),)
+	DEFINES	:=	$(DEFINES) "-DDEFAULT_ADDITIONAL_ARGS=\"$(DEFAULT_ADDITIONAL_ARGS)\""
+endif
+
 LIBS = -lcrypto
-OBJS = ctrclient-title.o $(CTRCLIENT)/ctrclient.o utils.o polarssl/aes.o polarssl/sha2.o
-CXXFLAGS = -Wall -Os -I. -I$(CTRCLIENT)
+OBJS = ctr-titletool.o $(EXTRA_OBJ) $(CTRCLIENT)/ctrclient.o utils.o polarssl/aes.o polarssl/sha2.o
+CXXFLAGS = -Wall -Os -I. -I$(CTRCLIENT) $(DEFINES)
 CFLAGS = $(CXXFLAGS) 
-OUTPUT = ctrclient-title
+OUTPUT = ctr-titletool
 CC = gcc
 
 ifneq ($(strip $(NIX)),)
