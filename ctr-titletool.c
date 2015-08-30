@@ -11,7 +11,7 @@
 #include "utils.h"
 #include "tmd.h"
 
-#include "polarssl/aes.h"
+#include <openssl/aes.h>
 #include <openssl/sha.h>
 
 #define _FILE_OFFSET_BITS 64 /* for pre libcurl 7.19.0 curl_off_t magic */
@@ -700,7 +700,7 @@ int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *ch
 	unsigned char titlekey[16];
 	unsigned char iv[16];
 	unsigned char calchash[32];
-	aes_context aes_ctx;
+	AES_KEY aeskey_dec;
 
 	u16 index;
 	u32 contentid;
@@ -726,8 +726,8 @@ int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *ch
 		}
 	}
 
-	ret = aes_setkey_dec(&aes_ctx, titlekey, 128);
-	if(ret!=0)
+	ret = AES_set_decrypt_key(titlekey, 128, &aeskey_dec);
+	if(ret<0)
 	{
 		printf("Failed to set key: %d\n", ret);
 		return ret;
@@ -777,13 +777,7 @@ int decrypt_contents(uint64_t titleid, char *titlepath, ctr_tmd_contentchunk *ch
 		}
 		fclose(f);
 
-		ret = aes_crypt_cbc(&aes_ctx, AES_DECRYPT, (int)contentsz_aligned, iv, buffer, buffer);
-		if(ret!=0)
-		{
-			printf("Failed to decrypt content: %d\n", ret);
-			free(buffer);
-			return ret;
-		}
+		AES_cbc_encrypt(buffer, buffer, contentsz_aligned, &aeskey_dec, iv, AES_DECRYPT);
 
 		f = fopen(outpath, "wb");
 		if(f==NULL)
@@ -1028,7 +1022,7 @@ int load_key(const char *path, uint8_t *key, uint32_t len)
 int decrypt_titlekey(unsigned char *ticket, unsigned char *titlekey)
 {
 	ctrclient client;
-	aes_context aes_ctx;
+	AES_KEY aeskey_dec;
 
 	unsigned char key[16];
 	unsigned char iv[16];
@@ -1078,8 +1072,12 @@ int decrypt_titlekey(unsigned char *ticket, unsigned char *titlekey)
 
 	if(normalkey)
 	{
-		ret = aes_setkey_dec(&aes_ctx, key, 128);
-		if(ret != 0)return 2;
+		ret = AES_set_decrypt_key(key, 128, &aeskey_dec);
+		if(ret<0)
+		{
+			printf("Failed to set key: %d\n", ret);
+			return ret;
+		}
 	}
 	else
 	{
@@ -1092,8 +1090,7 @@ int decrypt_titlekey(unsigned char *ticket, unsigned char *titlekey)
 
 	if(normalkey)
 	{
-		ret = aes_crypt_cbc(&aes_ctx, AES_DECRYPT, 16, iv, titlekey, titlekey);
-		if(ret != 0)return 2;
+		AES_cbc_encrypt(titlekey, titlekey, 16, &aeskey_dec, iv, AES_DECRYPT);
 	}
 	else
 	{

@@ -15,7 +15,7 @@ ifneq ($(strip $(DEFAULT_ADDITIONAL_ARGS)),)
 endif
 
 LIBS = -lcrypto
-OBJS = ctr-titletool.o $(EXTRA_OBJ) $(CTRCLIENT)/ctrclient.o utils.o polarssl/aes.o polarssl/sha2.o
+OBJS = ctr-titletool.o $(EXTRA_OBJ) $(CTRCLIENT)/ctrclient.o utils.o
 CXXFLAGS = -Wall -Os -I. -I$(CTRCLIENT) $(DEFINES)
 CFLAGS = $(CXXFLAGS) 
 OUTPUT = ctr-titletool
