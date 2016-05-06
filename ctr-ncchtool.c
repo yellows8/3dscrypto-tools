@@ -252,13 +252,14 @@ int run_ctrtool(char *ncchfn, char *prefix)
 	ret = system(sys_cmd);
 	if(ret!=0)return ret;
 
-	if(noromfs)return 0;
-
-	memset(sys_cmd, 0, sizeof(sys_cmd));
-	snprintf(sys_cmd, sizeof(sys_cmd)-1, "ctrtool -v --verify -p --keyset=%s --romfsdir=%s_romfs %s.romfs > %s.romfs_info", keypath, prefix, prefix, prefix);
-	ret = system(sys_cmd);
-	if(ret==-1)return ret;
-	//if(ret!=0)return ret;
+	if(!noromfs)
+	{
+		memset(sys_cmd, 0, sizeof(sys_cmd));
+		snprintf(sys_cmd, sizeof(sys_cmd)-1, "ctrtool -v --verify -p --keyset=%s --romfsdir=%s_romfs %s.romfs > %s.romfs_info", keypath, prefix, prefix, prefix);
+		ret = system(sys_cmd);
+		if(ret==-1)return ret;
+		//if(ret!=0)return ret;
+	}
 
 	if(enable_disasm)
 	{
