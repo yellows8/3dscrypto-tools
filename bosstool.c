@@ -63,6 +63,7 @@ int main(int argc, char *argv[])
 
 	u32 programID[2] = {0};
 	u32 nsdataid = 0;
+	u32 datatype = 0x20001;
 
 	SHA256_CTX ctx;
 
@@ -74,6 +75,27 @@ int main(int argc, char *argv[])
 	memset(infn, 0, 256);
 	memset(outfn, 0, 256);
 	memset(serveradr, 0, 256);
+
+	if(argc==1)
+	{
+		printf("%s by yellows8\n", argv[0]);
+		printf("Decrypt or build the 3DS SpotPass BOSS-container for content.\n");
+		printf("By default this will decrypt the input, with the output data starting at the Content Header.\n");
+		printf("Usage:\n");
+		printf("--serveradr=<addr> Server address to use for crypto.\n");
+		printf("--input=<filepath> Input file.\n");
+		printf("--output=<filepath> Output file.\n");
+		printf("-p Skip crypto.\n");
+		printf("--payloadhdr Write output to the file starting at the Payload Content Header.\n");
+		printf("--payload Write output to the file starting at the actual content payload.\n");
+		printf("--payloadsz=<hexval> Decrypt the actual content payload using the specified size instead of decrypting the entire content.\n");
+		printf("--build Build a BOSS-container file. The final content payload is the input file. The --programID and --nsdataid params should be used with this. This can only be used on *nix due to using /dev/urandom.\n");
+		printf("--programID=0x<u64 programID> programID to store in the output BOSS-container for --build.\n");
+		printf("--nsdataid=0x<u32 nsdataid> NsDataId to store in the output BOSS-container for --build.\n");
+		printf("--datatype=0x<u32 datatype> datatype to store in the output BOSS-container for --build. Default is 0x20001.\n");
+
+		return 0;
+	}
 
 	for(argi=1; argi<argc; argi++)
 	{
@@ -99,6 +121,7 @@ int main(int argc, char *argv[])
 
 		if(strncmp(argv[argi], "--programID=", 12)==0)sscanf(&argv[argi][12], "%08x%08x", &programID[0], &programID[1]);
 		if(strncmp(argv[argi], "--nsdataid=", 11)==0)sscanf(&argv[argi][11], "0x%08x", &nsdataid);
+		if(strncmp(argv[argi], "--datatype=", 11)==0)sscanf(&argv[argi][11], "0x%08x", &datatype);
 	}
 
 	if(infn[0]==0)return 1;
@@ -174,7 +197,7 @@ int main(int argc, char *argv[])
 		putbe32(&buffer[0x28+0x132+0x0], programID[0]);
 		putbe32(&buffer[0x28+0x132+0x4], programID[1]);
 		putbe32(&buffer[0x28+0x132+0x8], 0x0);
-		putbe32(&buffer[0x28+0x132+0xc], 0x20001);
+		putbe32(&buffer[0x28+0x132+0xc], datatype);
 		putbe32(&buffer[0x28+0x132+0x10], filestat.st_size);
 		putbe32(&buffer[0x28+0x132+0x14], nsdataid);//NsDataId
 		putbe32(&buffer[0x28+0x132+0x18], 0x1);
@@ -210,7 +233,7 @@ int main(int argc, char *argv[])
 			return 9;
 		}
 
-		if(payloadsz)bufsz = 0x176 + payloadsz;
+		if(payloadsz && payloadsz<bufsz)bufsz = 0x296 + payloadsz;
 
 		tmpsz = bufsz-0x28;
 		if(tmpsz & 0xf)tmpsz = (tmpsz + 0xf) & ~0xf;
@@ -229,7 +252,7 @@ int main(int argc, char *argv[])
 		if(output_type<3)
 		{
 			if(output_type>=1)outoff+=0x132;
-			if(output_type>=2)outoff+=0x1c;
+			if(output_type>=2)outoff+=0x13c;
 		}
 		else
 		{
