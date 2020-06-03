@@ -18,6 +18,7 @@
 #endif
 
 #include <openssl/aes.h>
+#include <openssl/modes.h>
 
 #include <stdint.h>
 
@@ -661,7 +662,7 @@ int ctrclient_aes_ctr_crypt(ctrclient* client, unsigned char* buffer, unsigned i
 
 	while(pos < size)
 	{
-		AES_ctr128_encrypt(&buffer[pos], &buffer[pos], 0x10, &aeskey_enc, current_aesctr, aes_ecount, &aes_num);
+		CRYPTO_ctr128_encrypt(&buffer[pos], &buffer[pos], 0x10, &aeskey_enc, current_aesctr, aes_ecount, &aes_num, (block128_f)AES_encrypt);
 		pos+= 0x10;
 	}
 

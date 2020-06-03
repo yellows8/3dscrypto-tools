@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <openssl/aes.h>
+#include <openssl/modes.h>
 
 //Build with: gcc ctr-cryptotool.c -lcrypto -o ctr-cryptotool
 
@@ -947,7 +948,7 @@ int main(int argc, char *argv[])
        	 			return 1;
     			}
 
-			AES_ctr128_encrypt(buffer, buffer, inbufsize, &aeskey, ctr, aes_ecount, &aes_num);
+			CRYPTO_ctr128_encrypt(buffer, buffer, inbufsize, &aeskey, ctr, aes_ecount, &aes_num, (block128_f)AES_encrypt);
 		}
 		else if(cryptmode==4)
 		{
@@ -1071,7 +1072,7 @@ int main(int argc, char *argv[])
        			 			return 1;
     					}
 
-					AES_ctr128_encrypt(buffer, buffer, 0x10, &aeskey, ctr, aes_ecount, &aes_num);
+					CRYPTO_ctr128_encrypt(buffer, buffer, 0x10, &aeskey, ctr, aes_ecount, &aes_num, (block128_f)AES_encrypt);
 				}
 				else
 				{
